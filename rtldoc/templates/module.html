@@ -49,9 +49,7 @@
       <span class="graph-hint">scroll or pinch to zoom · drag to move · click a node to open</span>
     </figcaption>
   </figure>
-  <p class="graph-legend muted">Blue: an input. Magenta: an output. Green: an interface.
-  Orange: no direction. A hexagon shows a port that goes in two directions. The clock
-  and the reset nets are not in the graph.</p>
+  {% include "_graph_legend.html" %}
 </section>
 {% elif mod.module_instances %}
 {% else %}
@@ -95,7 +93,7 @@
       {% for p in ports[g] %}
       <tr>
         <td><span class="dir dir-{{ p.eff_dir }}{{ ' dir-if' if p.is_interface }}">{{ p.eff_dir|dirbadge }}</span></td>
-        <td class="mono strong">{{ p.name }}</td>
+        <td class="mono strong">{{ p.name }}{% set k = p.name|signal_kind %}{% if k %} <span class="kindtag kind-{{ k }}">{{ 'ctrl' if k == 'control' else 'flag' }}</span>{% endif %}</td>
         <td class="mono ty">{% if p.is_interface %}<a href="module-{{ p.interface }}.html">{{ p.interface }}</a>{% if p.modport %} <span class="muted">.{{ p.modport }}</span>{% endif %}{% else %}{{ p.type }}{% endif %}</td>
         <td class="num">{% if p.width %}{{ p.width }}{% else %}-{% endif %}</td>
       </tr>

@@ -196,6 +196,9 @@ class Design:
     generated_at: str = ""
     tool_version: str = ""
     diagnostics: list[str] = field(default_factory=list)   # Warnings
+    #: The naming rules of this code base, from `rtldoc.yml`. The keys are
+    #: `control` and `status`; each value is a list of regular expressions.
+    conventions: dict[str, list[str]] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:
         """The model as JSON. The code of each file is not in it, because the

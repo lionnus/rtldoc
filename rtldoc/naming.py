@@ -21,6 +21,20 @@ IN_MODPORTS = {"sink", "subordinate", "slave", "slv", "in", "consumer", "target"
 #: The name endings that give a direction. The longer ending comes first.
 DIR_SUFFIX = (("_in", "in"), ("_out", "out"), ("_i", "in"), ("_o", "out"))
 
+#: The name parts of a control signal: one module sets the behaviour of another.
+CTRL_TOKENS = {
+    "ctrl", "cfg", "config", "cmd", "mode", "sel", "en", "enable",
+    "start", "stop", "clear", "flush", "trigger",
+}
+
+#: The name parts of a flag or status signal: the answer that control receives.
+STATUS_TOKENS = {
+    "flag", "flags", "status", "busy", "done", "err", "error",
+    "evt", "event", "irq", "interrupt",
+}
+
+_TOKEN_SPLIT = re.compile(r"[^a-z]+")
+
 
 def is_clock(name: str) -> bool:
     n = name.lower()
@@ -48,6 +62,30 @@ def name_direction(name: str) -> str:
     for suffix, direction in DIR_SUFFIX:
         if n.endswith(suffix):
             return direction
+    return ""
+
+
+def signal_kind(name: str, conventions: dict | None = None) -> str:
+    """`control`, `status` or `` for a signal, from its name.
+
+    *conventions* gives the rules of one code base, from `rtldoc.yml`:
+    ``{"control": [regex, ...], "status": [regex, ...]}``. A rule of the project
+    comes before the common tokens. A rule that is not a valid regular
+    expression is ignored, thus a bad settings file cannot stop a build.
+    """
+    n = (name or "").lower()
+    for kind in ("control", "status"):
+        for pattern in (conventions or {}).get(kind, []):
+            try:
+                if re.search(pattern, n):
+                    return kind
+            except re.error:
+                continue
+    tokens = set(_TOKEN_SPLIT.split(n))
+    if tokens & STATUS_TOKENS:
+        return "status"
+    if tokens & CTRL_TOKENS:
+        return "control"
     return ""
 
 

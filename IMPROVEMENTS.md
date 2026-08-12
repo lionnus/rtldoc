@@ -160,6 +160,23 @@ workflows of this repository use the same command as a user does.
 - The colour of a pin gives the kind, and the shape gives the direction. Blue is
   an input, magenta an output, green an interface and orange no direction. These
   are the colours of the port table, thus the graph and the table agree.
+- The kind of a signal has a colour and an edge style, thus the data path and
+  the control plane separate. A control signal (`ctrl`, `cfg`, `en`, `sel`, ...)
+  is amber and dashed; the arrows of its edges show which module controls what.
+  A flag or status signal (`flags`, `busy`, `done`, `evt`, ...) is violet and
+  dashed: the answer that control receives. The common tokens are in `naming`,
+  and the match is per word part, thus `len_i` is not an enable. Each code base
+  names these signals in its own way, thus `conventions:` in `rtldoc.yml` gives
+  extra regular expressions per kind; a rule of the project comes before the
+  common tokens, and a rule that does not compile is ignored. The port table
+  marks the same ports with the same rules, thus the two agree.
+- An interface edge is wide and green: a stream or a bus is the data path, not
+  one wire. The modport of each connection labels its edge, thus a
+  `hwpe_stream` shows `source → sink` — the direction of the data — by name and
+  by arrow.
+- The overview shows each top (at most four) with the same block diagram as its
+  module page, thus the first page and the page of a module read the same way.
+  One legend template serves both pages.
 - The direction of a logic port comes from the declaration. An interface port has
   no direction in the language: the name gives it (`_i`, `_in`, `_o`, `_out`),
   then the modport. A port that gives neither is a hexagon: the signals go in two
@@ -251,10 +268,45 @@ Recommendation: add it as a grouping that is applied when a module has named
 generate blocks, and keep the `xN` collapse for plain instance arrays. Medium
 effort, good payoff for parameterised or conditionally-built modules.
 
+### Git: the commit of a module, and the diff of an interface (evaluated)
+
+Possible: yes. Sensible: yes, in two separate steps.
+
+**The commit of each module.** The project root is normally a git repository
+(`project.git_root` finds it today). One `git log -1 --format=%h%x09%ad%x09%an
+-- <file>` per source file gives the hash, the date and the author of the last
+change. The module page then gets one more pill — `changed 2026-08-02 in
+a1b2c3d` — and the pill can link to the commit in the web view of the host
+(GitHub, GitLab), when `rtldoc.yml` gives the URL pattern. The cost is one git
+call per file of the root package; a dependency stays out, because its checkout
+often has no history. The layering fits: a new `gitinfo` module beside `bender`
+reads the repository, the extractor stores the result in the model, and the
+renderer shows it. `git blame` per port is possible with the line numbers that
+the model has, but one blame per file is slow on a large repository — leave it
+until someone asks.
+
+**The diff of an interface.** `model.json` already holds each port with its
+resolved type and width, each parameter value and each instance. A command
+`rtldoc diff old-model.json new-model.json` compares two builds and reports the
+modules whose boundary changed: a port added or removed, a width or a type
+changed, a parameter default changed. That is the question a reviewer asks —
+"did this change the interface?" — and CI can post the answer on a pull request.
+The comparison needs no git and no elaboration of the old revision: the old
+`model.json` comes from the last published site or from an artifact. A
+`--fail-on-change` flag makes it a check. This is the natural first git-related
+step, because the data is already there.
+
 ### Other ideas
 
 - Clock and reset domain map: trace clock and reset nets across the hierarchy and
   show domains and crossings, instead of per-module name detection.
+- Control tracing by connectivity: today the name gives the kind of a signal.
+  The elaborated AST could give it instead — a net that drives only enable or
+  select inputs is control by use, not by name. That removes the conventions
+  from the model, at the cost of reading every process.
+- A doc-site diff summary on the index page: "since the last build: 2 modules
+  changed, 1 port added" — the last `model.json` is in the output directory
+  before `gen` cleans it, thus the comparison is free.
 - Bit-accurate connectivity: distinguish bit-selects and struct fields so partial
   connections are visible.
 - Source links: link each module and port to its line in a repo web view.

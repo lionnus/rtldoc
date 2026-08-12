@@ -69,6 +69,7 @@ def _build_design(ctx: Ctx):
     if ctx.config.found:
         _log(f"Settings: {os.path.relpath(ctx.config.path, ctx.root)}")
     design = api.extract_design(ctx.root, tops=ctx.tops, log=_log)
+    design.conventions = ctx.config.conventions
     if not design.root_package:
         _warn("No bender root package. Make sure that Bender.yml gives a name.")
     _ok(f"{len(design.modules)} modules "

@@ -17,6 +17,7 @@
   --bg:#ffffff; --bg-2:#f6f8fa; --bg-3:#eceff3; --bg-4:#e2e7ee;
   --text:#0f172a; --text-2:#3f4d60; --muted:#6b7785;
   --in:#2563eb; --out:#c81d77; --io:#b45309; --ifc:#0d9488; --clk:#7c3aed; --rst:#b91c1c;
+  --ctl:#d97706; --flg:#9333ea;
   --sans:"IBM Plex Sans", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
 }
@@ -25,6 +26,7 @@
   --bg:#0c1118; --bg-2:#121821; --bg-3:#1a222e; --bg-4:#26303d;
   --text:#e8eef6; --text-2:#b3c0d1; --muted:#808d9f;
   --in:#5b9bff; --out:#f472b6; --io:#fbbf24; --ifc:#2dd4bf; --clk:#a78bfa; --rst:#f87171;
+  --ctl:#f59e0b; --flg:#c084fc;
 }
 * { box-sizing:border-box; }
 body { margin:0; font-family:var(--sans); color:var(--text); background:var(--bg);
@@ -162,6 +164,11 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
 .dir-inout { background:color-mix(in srgb,var(--io) 18%,transparent); color:var(--io); }
 .dir-interface { background:color-mix(in srgb,var(--ifc) 15%,transparent); color:var(--ifc); }
 .dir-if { box-shadow:inset 0 -2px 0 var(--ifc); }  /* marks an interface port */
+/* The kind of a signal, from its name. The graph uses the same colours. */
+.kindtag { display:inline-block; font-family:var(--sans); font-size:.72em; font-weight:600;
+  padding:0 5px; vertical-align:1px; letter-spacing:.02em; }
+.kind-control { background:color-mix(in srgb,var(--ctl) 16%,transparent); color:var(--ctl); }
+.kind-status { background:color-mix(in srgb,var(--flg) 14%,transparent); color:var(--flg); }
 
 /* ---- module cards grid ---- */
 .cardgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:2px; background:var(--bg-3); }
@@ -193,6 +200,11 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
 .graph-tools button[data-zoom-reset] { width:auto; padding:0 9px; }
 .graph-hint { color:var(--muted); margin-left:4px; }
 .graph-legend { font-size:.82em; margin:10px 2px 0; }
+/* The swatches of the legend */
+.lg { display:inline-block; width:10px; height:10px; vertical-align:-1px; }
+.lg-in { background:var(--in); } .lg-out { background:var(--out); }
+.lg-if { background:var(--ifc); } .lg-io { background:var(--io); }
+.lg-ctrl { background:var(--ctl); } .lg-flag { background:var(--flg); }
 
 /* ---- misc ---- */
 .empty { color:var(--muted); padding:18px; text-align:center; }

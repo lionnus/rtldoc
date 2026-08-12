@@ -15,6 +15,7 @@ import re
 from .dot import (
     C_CLUSTER,
     C_CLUSTER_LINE,
+    C_CTRL,
     C_DEP,
     C_DEP_TXT,
     C_IFACE,
@@ -24,9 +25,11 @@ from .dot import (
     C_NET_TXT,
     C_OUT,
     C_OWNED,
+    C_STATUS,
     C_TOP,
     FONT,
     FONT_MONO,
+    IFACE_PENWIDTH,
     NET_BOX,
     PIN_CDS,
     PIN_HEX,
@@ -34,7 +37,7 @@ from .dot import (
     header,
 )
 from .model import Design
-from .naming import is_clock, is_reset
+from .naming import is_clock, is_reset, signal_kind
 
 
 def _mod_node(design: Design, name: str, *, focus: bool = False) -> str:
@@ -109,6 +112,22 @@ def _conn_role(conn, child) -> str:
     return _iface_role(conn.modport) if conn.is_interface else _role(child, conn.port)
 
 
+def _edge_style(kind: str) -> dict:
+    """How an edge of one signal kind is drawn.
+
+    An interface is the data path: wide and green, and the arrow gives the
+    direction of the data. Control and status make the control plane: dashed,
+    and the arrow shows which module controls what. A plain wire stays grey.
+    """
+    if kind == "iface":
+        return {"color": C_IFACE, "penwidth": IFACE_PENWIDTH}
+    if kind == "control":
+        return {"color": C_CTRL, "dashed": True}
+    if kind == "status":
+        return {"color": C_STATUS, "dashed": True}
+    return {}
+
+
 def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
     """Schematic of *name*: child instances + the signals wiring them together."""
     mod = design.modules[name]
@@ -116,13 +135,14 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
     if not insts:
         return ""
 
-    # net -> list of (node_id, role)
-    nets: dict[str, list[tuple[str, str]]] = {}
+    # net -> list of (node_id, role, modport). The modport labels the edge of an
+    # interface, thus a stream shows its source and its sink by name.
+    nets: dict[str, list[tuple[str, str, str]]] = {}
 
-    def add(net: str, node: str, role: str) -> None:
+    def add(net: str, node: str, role: str, modport: str = "") -> None:
         if is_clock(net) or is_reset(net):
             return
-        nets.setdefault(net, []).append((node, role))
+        nets.setdefault(net, []).append((node, role, modport))
 
     inst_ids: dict[str, str] = {}
     for inst in insts:
@@ -132,11 +152,8 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
         for c in inst.conns:
             base = _net_base(c.net)
             if base:
-                add(base, nid, _conn_role(c, child))
-
-    # The interfaces that the module declares. The signal that carries an
-    # interface links to the declaration of that interface.
-    iface_of = {i.name: i.module for i in mod.interface_instances}
+                add(base, nid, _conn_role(c, child),
+                    c.modport if c.is_interface else "")
 
     # A boundary port joins the net that has its name. `Port.graph_dir` gives
     # `in`, `out` or `` for a port with no direction.
@@ -150,12 +167,24 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
                 "iface": p.interface if p.is_interface else "",
                 "is_iface": p.is_interface,
             }
-            nets[p.name].append((f"p__{p.name}", role))
+            nets[p.name].append((f"p__{p.name}", role, p.modport))
 
     # A net with one end only is not a connection. It stays out of the graph.
     nets = {n: eps for n, eps in nets.items() if len({e[0] for e in eps}) >= 2}
 
     kept_nets = sorted(nets)[:max_nodes]
+
+    # The interfaces that the module declares. The signal that carries an
+    # interface links to the declaration of that interface.
+    iface_of = {i.name: i.module for i in mod.interface_instances}
+
+    # The kind of each net: the data path, the control plane, or a plain wire.
+    def net_kind(net: str) -> str:
+        if net in iface_of or boundary.get(net, {}).get("is_iface"):
+            return "iface"
+        return signal_kind(net, design.conventions)
+
+    kinds = {net: net_kind(net) for net in kept_nets}
 
     lines = [header("LR")]
     # Boundary ports sit outside the module block, like external pins. A boundary
@@ -171,8 +200,17 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
             else:
                 # A hexagon has a point at each end: the signals go both ways.
                 shape = f"{PIN_HEX}, "
-            fill = (C_IFACE if info["is_iface"]
-                    else {"in": C_IN, "out": C_OUT}.get(info["dir"], C_IO))
+            # The colour of a pin gives the kind: an interface is green, a
+            # control signal amber, a flag violet, a data signal has the colour
+            # of its direction. The shape still gives the direction.
+            if info["is_iface"]:
+                fill = C_IFACE
+            elif kinds[net] == "control":
+                fill = C_CTRL
+            elif kinds[net] == "status":
+                fill = C_STATUS
+            else:
+                fill = {"in": C_IN, "out": C_OUT}.get(info["dir"], C_IO)
             lines.append(
                 f'  {{ rank={rank}; "p__{net}" [{shape}{_link(design, info["iface"])}'
                 f'label="{html.escape(net)}", fillcolor="{fill}", fontcolor="white", '
@@ -200,8 +238,9 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
     for net in kept_nets:
         if net not in boundary:
             iface = iface_of.get(net, "")
-            fill = C_IFACE if iface else C_NET
-            txt = "white" if iface else C_NET_TXT
+            fill = {"iface": C_IFACE, "control": C_CTRL,
+                    "status": C_STATUS}.get(kinds[net], C_NET)
+            txt = C_NET_TXT if fill == C_NET else "white"
             lines.append(
                 f'    "n__{net}" [{NET_BOX}, {_link(design, iface)}'
                 f'label="{html.escape(net)}", fillcolor="{fill}", fontcolor="{txt}", '
@@ -209,16 +248,24 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
             )
     lines.append("  }")
     # Wiring: drivers point into the signal (or boundary pin), signals point out
-    # to their loads.
+    # to their loads. The kind of the net styles the edge, and the modport of an
+    # interface connection labels it, thus a stream shows its direction and its
+    # two sides by name.
     for net in kept_nets:
         hub = f"p__{net}" if net in boundary else f"n__{net}"
-        for node, role in {(n, r) for n, r in nets[net] if not n.startswith("p__")}:
+        style = _edge_style(kinds[net])
+        ends: dict[tuple[str, str], str] = {}
+        for node, role, modport in nets[net]:
+            if not node.startswith("p__"):
+                ends.setdefault((node, role), modport)
+        for (node, role), modport in sorted(ends.items()):
+            label = modport if kinds[net] == "iface" else ""
             if role == "driver":
-                lines.append(edge(node, hub))
+                lines.append(edge(node, hub, label=label, **style))
             elif role == "load":
-                lines.append(edge(hub, node))
+                lines.append(edge(hub, node, label=label, **style))
             else:
-                lines.append(edge(hub, node, directed=False))
+                lines.append(edge(hub, node, label=label, directed=False, **style))
     lines.append("}")
     return "\n".join(lines)
 

@@ -17,7 +17,11 @@ documentation of the
 ## What you get
 
 - **A block diagram of each module**, with the child instances, the interfaces
-  and the signals between them.
+  and the signals between them. The colours separate the data path from the
+  control plane: a stream or a bus is a wide green line with the direction of
+  the data, a control signal is amber and dashed and shows which module controls
+  what, and a flag or status signal is violet. The overview shows each top with
+  the same diagram.
 - **A page for each module**: the ports with the resolved type and width, the
   parameter values, the clocks, the resets and the parent modules.
 - **The comment above the module.** Markdown, reStructuredText and the Doxygen
@@ -58,7 +62,8 @@ directory to your `.gitignore`. A simulator is not necessary.
 clone this repository and install that directory:
 `uv tool install --force ~/rtldoc`.
 
-In the site: **Overview** gives the tops, **Hierarchy** gives the structure,
+In the site: **Overview** gives the tops and their block diagrams, **Hierarchy**
+gives the structure,
 **Files** gives the compile order and the code, and a module page gives the ports
 and the block diagram. Push `/` to search.
 
@@ -106,7 +111,14 @@ name: My Design           # The title. The default is the directory name
 tops: [my_testbench_top]  # More top modules
 docs: [manual]            # More directories with text. `false` reads none
 sources: false            # Makes no page for the code
+conventions:              # The naming rules of this code base, for the graphs
+  control: ["^csr_"]      # More rules for a control signal (regex)
+  flags: ["^sts_"]        # More rules for a flag or status signal
 ```
+
+The common names (`ctrl`, `cfg`, `en`, `flags`, `status`, `busy`, `done`, …)
+colour without rules. `conventions` adds the rules of your code base, because
+each project names these signals in its own way.
 
 The tool shows the code of the root package only. The code of a dependency has
 another licence, thus it stays in its own repository.

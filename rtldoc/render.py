@@ -17,7 +17,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from . import __version__, docs, graphs, markup, project, source
 from .dot import render_dot
 from .model import Design, Module
-from .naming import reset_polarity
+from .naming import reset_polarity, signal_kind
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _TEMPLATES = os.path.join(_HERE, "templates")
@@ -68,6 +68,10 @@ class Renderer:
         )
         self.env.filters["dirbadge"] = _dirbadge
         self.env.filters["reset_polarity"] = reset_polarity
+        # The kind of a signal, with the rules of this code base. The port table
+        # and the graphs use the same rules, thus the two agree.
+        self.env.filters["signal_kind"] = (
+            lambda name: signal_kind(name, design.conventions))
 
     def _nav(self) -> list[dict]:
         """The side bar. The modules are in groups by package."""
@@ -265,8 +269,17 @@ class Renderer:
             "packages": len(d.packages),
         }
         svg = _responsive(render_dot(graphs.hierarchy_dot(d, max_nodes=60)))
+        # Each top gets the same block diagram as its module page, thus the
+        # first page and the page of a module read the same way.
+        top_views = []
+        for name in d.tops[:4]:
+            dot = graphs.internal_dot(d, name) if name in d.modules else ""
+            top_svg = _responsive(render_dot(dot)) if dot else None
+            if top_svg:
+                top_views.append({"name": name, "svg": top_svg})
         html = self.env.get_template("index.html").render(
-            **self._ctx(stats=stats, hierarchy_svg=svg, active="index")
+            **self._ctx(stats=stats, hierarchy_svg=svg, top_views=top_views,
+                        active="index")
         )
         self._write("index.html", html)
 

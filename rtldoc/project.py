@@ -53,6 +53,9 @@ class Config:
     doc_dirs: list = field(default_factory=list)   # More directories with Markdown
     docs_enabled: bool = True                      # `docs: false` stops the search
     sources_enabled: bool = True                   # `sources: false` shows no code
+    #: The naming rules of the code base: `control` and `status` map to lists of
+    #: regular expressions. The graphs colour the signals with them.
+    conventions: dict = field(default_factory=dict)
     path: str = ""          # The settings file. Empty if there is none
 
     @property
@@ -86,6 +89,7 @@ def load_config(project_root: str) -> Config:
             raw_docs = [raw_docs]
         doc_dirs = [str(d) for d in raw_docs] if isinstance(raw_docs, list) else []
         return Config(
+            conventions=_read_conventions(data.get("conventions")),
             output=str(data.get("output") or DEFAULT_OUTPUT),
             tops=[str(t) for t in tops],
             name=str(data.get("name") or ""),
@@ -95,6 +99,25 @@ def load_config(project_root: str) -> Config:
             path=path,
         )
     return Config()
+
+
+def _read_conventions(raw) -> dict:
+    """The `conventions` key: regular expressions per signal kind.
+
+    `flags` and `status` are two names for the same kind, because the HWPE
+    designs write `flags_o` and other designs write `status_o`.
+    """
+    if not isinstance(raw, dict):
+        return {}
+    conventions: dict = {}
+    for key, kind in (("control", "control"), ("ctrl", "control"),
+                      ("flags", "status"), ("status", "status")):
+        pats = raw.get(key)
+        if isinstance(pats, str):
+            pats = [pats]
+        if isinstance(pats, list):
+            conventions.setdefault(kind, []).extend(str(p) for p in pats)
+    return conventions
 
 
 CONFIG_TEMPLATE = """\
@@ -111,6 +134,14 @@ output: {output}
 
 # The title in the page header. The default is the name of the directory.
 # name: My Design
+
+# The naming rules of this code base. The graphs colour a control signal and a
+# flag or status signal with them. Each rule is a regular expression that is
+# searched in the lower-case name. The common names (ctrl, cfg, en, flags,
+# status, busy, done, ...) work without rules.
+# conventions:
+#   control: ["^ctl_", "_config$"]
+#   flags: ["^sts_"]
 
 # `sources: false` makes no page for the code of the files.
 """

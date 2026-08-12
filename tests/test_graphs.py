@@ -8,10 +8,12 @@ from conftest import needs_dot
 from rtldoc import dot as dotlib
 from rtldoc import graphs
 from rtldoc.dot import (
+    C_CTRL,
     C_DEP,
     C_IFACE,
     C_IN,
     C_OWNED,
+    C_STATUS,
     C_TOP,
     edge,
     render_dot,
@@ -314,3 +316,70 @@ def test_a_signal_that_is_not_an_interface_has_no_link(with_interface):
 def test_a_link_needs_a_unit_that_the_tool_found(design):
     assert graphs._link(design, "") == ""
     assert graphs._link(design, "not_extracted") == ""
+
+
+# -- the control plane and the data path -------------------------------------
+
+
+@pytest.fixture
+def with_control(design) -> Design:
+    """`top` gets a control input, a flag output and a status net inside."""
+    top = design.modules["top"]
+    top.ports += [Port("ctrl_i", "in"), Port("flags_o", "out")]
+    a, b = top.instances
+    a.conns += [PortConn("ctrl_i", "ctrl_i"), PortConn("busy_o", "flags_o"),
+                PortConn("d_i", "done")]
+    b.conns += [PortConn("ctrl_i", "ctrl_i"), PortConn("done_o", "done")]
+    return design
+
+
+def test_a_control_pin_and_its_edges_have_the_control_colour(with_control):
+    dot = graphs.internal_dot(with_control, "top")
+    attrs = dot.split('"p__ctrl_i" [')[1].split("]")[0]
+    assert C_CTRL in attrs, "the pin shows that the signal is control"
+    assert f'color="{C_CTRL}"' in dot, "the edges show which module it controls"
+    assert 'style="dashed"' in dot
+
+
+def test_a_flag_pin_has_the_status_colour(with_control):
+    dot = graphs.internal_dot(with_control, "top")
+    attrs = dot.split('"p__flags_o" [')[1].split("]")[0]
+    assert C_STATUS in attrs
+
+
+def test_a_status_net_between_two_instances_is_coloured(with_control):
+    dot = graphs.internal_dot(with_control, "top")
+    attrs = dot.split('"n__done" [')[1].split("]")[0]
+    assert C_STATUS in attrs
+    assert f'color="{C_STATUS}"' in dot
+
+
+def test_a_data_net_keeps_the_plain_style(with_control):
+    dot = graphs.internal_dot(with_control, "top")
+    attrs = dot.split('"n__mid" [')[1].split("]")[0]
+    assert C_CTRL not in attrs and C_STATUS not in attrs
+    assert '"i__i_a" -> "n__mid";' in dot, "a data edge carries no style"
+
+
+def test_the_rules_of_the_project_colour_a_net(design):
+    design.conventions = {"control": ["^weird$"]}
+    top = design.modules["top"]
+    top.instances[0].conns.append(PortConn("w_o", "weird"))
+    top.instances[1].conns.append(PortConn("w_i", "weird"))
+    dot = graphs.internal_dot(design, "top")
+    attrs = dot.split('"n__weird" [')[1].split("]")[0]
+    assert C_CTRL in attrs, "the rule of the code base decides the kind"
+
+
+def test_a_stream_shows_its_direction_and_its_sides(design):
+    """The modports label the edges: the data goes from the source to the sink."""
+    d = design
+    d.modules["demo_if"] = Module(name="demo_if", kind="interface", package="demo_ip")
+    top = d.modules["top"]
+    top.instances.append(Instance(name="stream", module="demo_if", is_interface=True))
+    a, b = top.instances[:2]
+    a.conns.append(PortConn("push", "stream", is_interface=True, modport="source"))
+    b.conns.append(PortConn("pop", "stream", is_interface=True, modport="sink"))
+    dot = graphs.internal_dot(d, "top")
+    assert f'"i__i_a" -> "n__stream" [label="source", color="{C_IFACE}", penwidth=1.6];' in dot
+    assert f'"n__stream" -> "i__i_b" [label="sink", color="{C_IFACE}", penwidth=1.6];' in dot

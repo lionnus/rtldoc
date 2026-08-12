@@ -24,6 +24,13 @@ C_NET_TXT = "#475569"
 C_IN = "#2563eb"        # An input
 C_OUT = "#c81d77"       # An output
 C_IO = "#b45309"        # No direction: the signals go both ways
+# The signal kinds that a name gives. Control and status make the control plane;
+# the arrows of the control edges show which module controls what.
+C_CTRL = "#d97706"      # A control signal: one module sets the behaviour of another
+C_STATUS = "#9333ea"    # A flag or status signal: the answer that control receives
+# An interface edge is a stream or a bus. It is wider than a wire, thus the data
+# path stands out, and the arrow gives the direction of the data.
+IFACE_PENWIDTH = 1.6
 
 # `cds` draws about two thirds of the height of its node, and `hexagon` draws the
 # full height. These values give each pin and each signal the same height.
@@ -69,12 +76,20 @@ def header(rankdir: str = "TB") -> str:
     )
 
 
-def edge(a: str, b: str, label: str = "", directed: bool = True) -> str:
+def edge(a: str, b: str, label: str = "", directed: bool = True,
+         color: str = "", penwidth: float | None = None,
+         dashed: bool = False) -> str:
     extra = []
     if label:
         extra.append(f'label="{html.escape(label)}"')
     if not directed:
         extra.append("dir=none")
+    if color:
+        extra.append(f'color="{color}"')
+    if penwidth is not None:
+        extra.append(f"penwidth={penwidth}")
+    if dashed:
+        extra.append('style="dashed"')
     if extra:
         return f'  "{a}" -> "{b}" [{", ".join(extra)}];'
     return f'  "{a}" -> "{b}";'
