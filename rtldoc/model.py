@@ -71,6 +71,14 @@ class Port:
 
 
 @dataclass
+class Modport:
+    """One modport of an interface: the view of one side of the connection."""
+
+    name: str
+    ports: list[Port] = field(default_factory=list)   # name and direction
+
+
+@dataclass
 class PortConn:
     """One `.port(net)` connection on an instance."""
 
@@ -105,6 +113,10 @@ class Module:
     ports: list[Port] = field(default_factory=list)
     instances: list[Instance] = field(default_factory=list)
     imports: list[str] = field(default_factory=list)        # Imported packages
+    #: For an interface: the signals that it declares, and its modports. These
+    #: are what an interface is; a module has ports and instances instead.
+    signals: list[Port] = field(default_factory=list)
+    modports: list[Modport] = field(default_factory=list)
     # Where the module comes from
     file: str = ""             # The absolute path of the source file
     rel_file: str = ""         # The path from the project root

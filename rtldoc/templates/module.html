@@ -9,7 +9,7 @@
 
 <div class="page-head">
   <div>
-    <div class="eyebrow">{{ mod.kind }}{% if not mod.elaborated %} · source-only{% endif %}</div>
+    <div class="eyebrow{{ ' eyebrow-if' if mod.kind == 'interface' }}">{{ mod.kind }}{% if not mod.elaborated %} · source-only{% endif %}</div>
     <h1 class="mono">{{ mod.name }}</h1>
     {% if mod.desc and not comment_html %}<p class="lede">{{ mod.desc }}</p>{% endif %}
     <div class="meta-row">
@@ -64,10 +64,52 @@
   </figure>
   {% include "_graph_legend.html" %}
 </section>
-{% elif mod.module_instances %}
+{% elif mod.module_instances or mod.kind == 'interface' %}
 {% else %}
 <section class="card card-flat">
   <p class="muted">This module instantiates no other module.</p>
+</section>
+{% endif %}
+
+{% if mod.signals %}
+<section class="card">
+  <h2>Signals <span class="pill">{{ mod.signals|length }}</span></h2>
+  <p class="muted">the wires that the two sides of this interface share</p>
+  <div class="tablewrap">
+  <table class="ports">
+    <thead><tr><th>Name</th><th>Type</th><th class="num">Width</th></tr></thead>
+    <tbody>
+      {% for s in mod.signals %}
+      <tr>
+        <td class="mono strong">{{ s.name }}{% set k = s.name|signal_kind %}{% if k %} <span class="kindtag kind-{{ k }}">{{ 'ctrl' if k == 'control' else 'flag' }}</span>{% endif %}</td>
+        <td class="mono ty">{{ s.type }}</td>
+        <td class="num">{% if s.width %}{{ s.width }}{% else %}-{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% if mod.modports %}
+<section class="card">
+  <h2>Modports <span class="pill">{{ mod.modports|length }}</span></h2>
+  <p class="muted">each side of the interface, with the direction of each signal from that side</p>
+  <div class="tablewrap">
+  <table class="ports">
+    <thead><tr><th>Modport</th><th>Drives</th><th>Reads</th></tr></thead>
+    <tbody>
+      {% for mp in mod.modports %}
+      <tr>
+        <td class="mono strong">{{ mp.name }}</td>
+        <td class="mono">{% for p in mp.ports if p.direction == 'out' %}{{ p.name }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+        <td class="mono">{% for p in mp.ports if p.direction == 'in' %}{{ p.name }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
 </section>
 {% endif %}
 

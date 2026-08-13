@@ -25,7 +25,7 @@ import re
 from .bender import BenderInfo
 from .comments import doc_comments, summary
 from .deps import HAVE_PYSLANG, Driver  # `deps` probes pyslang
-from .model import Design, Instance, Module, Param, Port, PortConn
+from .model import Design, Instance, Modport, Module, Param, Port, PortConn
 
 # --- Functions that read the source text ------------------------------------
 
@@ -273,7 +273,38 @@ def _module_from_body(body, sm) -> Module:
         for i, name, gen in _direct_instances(body)
     ]
     mod.instances = _collapse_instances(raw)
+    if mod.kind == "interface":
+        _interface_contents(body, mod)
     return mod
+
+
+def _interface_contents(body, mod: Module) -> None:
+    """The signals and the modports of an interface.
+
+    These are what an interface is: a module has ports and instances, an
+    interface has the signals that the two sides share, and one modport for
+    each side. Without them, the page of an interface is empty.
+    """
+    port_names = {p.name for p in mod.ports}
+    for m in body:
+        k = _kind(m)
+        if k == "VariableSymbol" and m.name not in port_names:
+            t = getattr(m, "type", None)
+            width = getattr(t, "bitWidth", None) if t is not None else None
+            mod.signals.append(Port(
+                name=m.name, direction="",
+                type=str(t) if t is not None else "",
+                width=width if width else None,
+            ))
+        elif k == "ModportSymbol":
+            mp = Modport(name=m.name)
+            for p in m:
+                if _kind(p) == "ModportPortSymbol":
+                    mp.ports.append(Port(
+                        name=getattr(p, "name", ""),
+                        direction=_dir_str(getattr(p, "direction", "")),
+                    ))
+            mod.modports.append(mp)
 
 
 # --- The main function ------------------------------------------------------

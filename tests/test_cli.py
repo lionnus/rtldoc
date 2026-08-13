@@ -341,6 +341,22 @@ def test_a_module_page_shows_the_instantiated_version(run_cli, project_dir, stub
     assert ctx in page, "the page tells the reader which instantiation it shows"
 
 
+def test_an_interface_page_shows_its_signals_and_modports(run_cli, project_dir,
+                                                          stub_bender):
+    """A module has ports and instances; an interface has shared signals and
+    one modport per side. The page must show what the interface is."""
+    assert _gen(run_cli, project_dir) == 0
+    model = json.loads((project_dir / project.DEFAULT_OUTPUT / "model.json").read_text())
+    bus = model["modules"]["demo_bus_if"]
+    assert {s["name"] for s in bus["signals"]} == {"data", "valid", "ready"}
+    mps = {m["name"]: m for m in bus["modports"]}
+    assert set(mps) == {"master", "slave"}
+    assert {p["name"] for p in mps["master"]["ports"]
+            if p["direction"] == "out"} == {"data", "valid"}
+    page = (project_dir / project.DEFAULT_OUTPUT / "module-demo_bus_if.html").read_text()
+    assert "Modports" in page and "Signals" in page
+
+
 def test_init_keeps_an_existing_config(run_cli, project_dir, capsys):
     (project_dir / "rtldoc.yml").write_text("name: Mine\n")
     assert run_cli("init", cwd=project_dir) == 0

@@ -37,6 +37,9 @@ IFACE_PENWIDTH = 1.6
 PIN_CDS = 'shape=cds, height=0.37, margin="0.16,0.0"'
 PIN_HEX = 'shape=hexagon, height=0.25, margin="0.16,0.0"'
 NET_BOX = 'shape=box, height=0.25, margin="0.10,0.0"'
+# An interface is not a module and not a wire: the slanted box tells it apart
+# from the straight box of an instance, in each graph and at each size.
+IFACE_BOX = 'shape=parallelogram, height=0.3, margin="0.05,0.02"'
 C_CLUSTER = "#f1f5f9"   # Fill of the module boundary
 C_CLUSTER_LINE = "#cbd5e1"
 C_GEN = "#e8edf4"       # Fill of a generate block inside the module boundary

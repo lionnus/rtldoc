@@ -132,6 +132,8 @@ a.stat:hover { background:var(--bg-3); text-decoration:none; }
 .pill-ok { background:color-mix(in srgb,var(--teal) 16%,transparent); color:var(--teal); }
 /* The instantiation whose parameters the page shows */
 .pill-inst { background:var(--bg-3); color:var(--text-2); overflow-wrap:anywhere; }
+/* The page of an interface carries its colour, thus the kind is clear */
+.eyebrow-if { color:var(--ifc); }
 a.pill:hover { text-decoration:none; filter:brightness(.96); }
 .chiprow { display:flex; flex-wrap:wrap; gap:7px; }
 .chip { display:inline-flex; flex-direction:column; padding:7px 12px; background:var(--bg-3);
@@ -208,6 +210,7 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
 .graph-legend { font-size:.82em; margin:10px 2px 0; }
 /* The swatches of the legend */
 .lg { display:inline-block; width:10px; height:10px; vertical-align:-1px; }
+.lg-slant { transform:skewX(-18deg); }
 .lg-in { background:var(--in); } .lg-out { background:var(--out); }
 .lg-if { background:var(--ifc); } .lg-io { background:var(--io); }
 .lg-ctrl { background:var(--ctl); } .lg-flag { background:var(--flg); }

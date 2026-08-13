@@ -174,6 +174,18 @@ workflows of this repository use the same command as a user does.
   one wire. The modport of each connection labels its edge, thus a
   `hwpe_stream` shows `source → sink` — the direction of the data — by name and
   by arrow.
+- An interface is a slanted green box, everywhere: the hub of a stream, the
+  symbol of an interface page. A straight box is a module. Colour alone did not
+  tell the two apart, because a net hub and an instance are both boxes.
+- The ports stand inside the module frame, at its walls: the input rail at the
+  left edge, the output rail at the right edge. Thus the frame owns its ports,
+  and a wire from a rail runs inside the frame instead of around it. Before,
+  the pins floated outside the box and their wires arced around it.
+- The page of an interface shows its signals - the wires that the two sides
+  share, with the widths of the instantiation - and its modports, with what
+  each side drives and reads. A module has ports and instances; an interface
+  has these. Without them the page of `hci_core_intf` was one clock and a
+  parameter table.
 - The overview shows each top (at most four) with the same block diagram as its
   module page, thus the first page and the page of a module read the same way.
   One legend template serves both pages.

@@ -157,6 +157,22 @@ def test_the_pins_of_one_side_share_one_column(with_interface):
     assert '-> "a__out" [style=invis' in dot, "the wall keeps the box inside"
 
 
+def test_the_ports_stand_inside_the_module_frame(with_interface):
+    """The frame owns its ports: the rails are inside the cluster, thus the
+    box wraps them and a wire from a rail runs inside the frame."""
+    dot = schematic.internal_dot(with_interface, "top")
+    assert dot.index('subgraph "cluster_top"') < dot.index("rank=min;")
+    assert dot.index("rank=max;") < dot.index("\n  }")
+
+
+def test_the_symbol_of_an_interface_is_a_slanted_box(design):
+    design.modules["demo_if"] = Module(
+        name="demo_if", kind="interface", package="demo_ip",
+        ports=[Port("data", "inout", width=8)])
+    dot = schematic.symbol_dot(design, "demo_if")
+    assert f'"m__demo_if" [shape=parallelogram, label=<<b>demo_if</b>>, fillcolor="{C_IFACE}"' in dot
+
+
 def test_each_interface_port_keeps_the_colour_of_an_interface(with_interface):
     dot = schematic.internal_dot(with_interface, "top")
     for pin in ("p__bus", "p__data_in", "p__tcdm"):
@@ -179,7 +195,8 @@ def test_an_interface_port_opens_its_declaration(with_interface):
 
 def test_a_signal_that_carries_an_interface_opens_its_declaration(with_interface):
     dot = schematic.internal_dot(with_interface, "top")
-    assert '"n__stream" [shape=box, height=0.25, margin="0.10,0.0", href="module-demo_if.html"' in dot
+    assert ('"n__stream" [shape=parallelogram, height=0.3, margin="0.05,0.02", '
+            'href="module-demo_if.html"') in dot, "an interface is a slanted box"
     assert C_IFACE in dot, "the interface has its own colour"
 
 

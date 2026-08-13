@@ -29,6 +29,7 @@ from .dot import (
     C_STATUS,
     FONT,
     FONT_MONO,
+    IFACE_BOX,
     IFACE_PENWIDTH,
     NET_BOX,
     PIN_CDS,
@@ -368,28 +369,32 @@ def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
     lonely = [n for n in kept if len({e[0] for e in nets[n]}) < 2]
 
     lines = [header("LR", newrank=True)]
-    # Boundary ports sit outside the module block, like external pins. A pin
-    # doubles as the hub for its net, so no separate signal node is drawn.
-    pin_lines, sides = _pin_columns(design, kept, boundary, kinds)
-    lines += pin_lines
-    # The module itself is the enclosing block; submodules and signals nest inside.
+    # The module itself is the enclosing block. The ports stand inside it, at
+    # its walls: the input rail at the left edge, the output rail at the right
+    # edge, the submodules and the signals between the rails. Thus the frame
+    # owns its ports, and a wire from a rail to an instance runs inside the
+    # frame instead of around it.
     lines.append(f'  subgraph "cluster_{name}" {{')
     lines.append(
         f'    label="{html.escape(name)}"; labeljust=l; fontname="{FONT}"; '
-        f'fontsize=11; fontcolor="{C_NET_TXT}"; style=filled; '
-        f'fillcolor="{C_CLUSTER}"; color="{C_CLUSTER_LINE}"; margin=24;'
+        f'fontsize=12; fontcolor="{C_NET_TXT}"; style=filled; '
+        f'fillcolor="{C_CLUSTER}"; color="{C_CLUSTER_LINE}"; penwidth=1.6; '
+        "margin=28;"
     )
+    pin_lines, sides = _pin_columns(design, kept, boundary, kinds)
+    lines += ["  " + ln for ln in pin_lines]
     lines += _instance_lines(design, insts, inst_ids, max_nodes)
     if lonely:
         lines.append(_logic_node_line(name))
     for net in kept:
         if net not in boundary:
             iface = iface_of.get(net, "")
+            shape = IFACE_BOX if kinds[net] == "iface" else NET_BOX
             fill = {"iface": C_IFACE, "control": C_CTRL,
                     "status": C_STATUS}.get(kinds[net], C_NET)
             txt = C_NET_TXT if fill == C_NET else "white"
             lines.append(
-                f'    "n__{net}" [{NET_BOX}, {_link(design, iface)}'
+                f'    "n__{net}" [{shape}, {_link(design, iface)}'
                 f'label="{html.escape(net)}", fillcolor="{fill}", fontcolor="{txt}", '
                 f'fontname="{FONT_MONO}", fontsize=9];'
             )
@@ -416,11 +421,18 @@ def symbol_dot(design: Design, name: str, max_ports: int = 60) -> str:
         return ""
     owned = mod.package == design.root_package
     body = f"m__{name}"
+    # An interface keeps its slanted shape and its colour, thus the symbol of
+    # `hci_core_intf` cannot be read as the symbol of a module.
+    if mod.kind == "interface":
+        shape, fill, txt = "shape=parallelogram, ", C_IFACE, "white"
+    else:
+        shape = ""
+        fill = C_OWNED if owned else C_DEP
+        txt = "white" if owned else C_DEP_TXT
     lines = [header("LR")]
     lines.append(
-        f'  "{body}" [label=<<b>{html.escape(name)}</b>>, '
-        f'fillcolor="{C_OWNED if owned else C_DEP}", '
-        f'fontcolor="{"white" if owned else C_DEP_TXT}", margin="0.35,0.25"];'
+        f'  "{body}" [{shape}label=<<b>{html.escape(name)}</b>>, '
+        f'fillcolor="{fill}", fontcolor="{txt}", margin="0.35,0.25"];'
     )
     sides = {"min": [], "max": []}
     wires: list[str] = []
