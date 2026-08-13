@@ -43,6 +43,24 @@ def test_config_accepts_scalar_top(project_dir):
     assert project.load_config(str(project_dir)).tops == ["demo_top"]
 
 
+def test_config_reads_the_conventions(project_dir):
+    (project_dir / "rtldoc.yml").write_text(
+        "conventions:\n  control: ['^csr_']\n  flags: '_sts$'\n  status: ['^state']\n"
+    )
+    cfg = project.load_config(str(project_dir))
+    assert cfg.conventions["control"] == ["^csr_"]
+    assert cfg.conventions["status"] == ["_sts$", "^state"], (
+        "`flags` and `status` name the same kind"
+    )
+
+
+def test_config_without_conventions_gives_no_rules(project_dir):
+    (project_dir / "rtldoc.yml").write_text("name: Demo\n")
+    assert project.load_config(str(project_dir)).conventions == {}
+    (project_dir / "rtldoc.yml").write_text("conventions: nonsense\n")
+    assert project.load_config(str(project_dir)).conventions == {}
+
+
 def test_config_survives_broken_yaml(project_dir):
     (project_dir / "rtldoc.yml").write_text("output: [unclosed\n")
     cfg = project.load_config(str(project_dir))

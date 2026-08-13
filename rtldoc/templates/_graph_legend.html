@@ -1,0 +1,16 @@
+{# The legend of the block diagram. The module page and the overview share it. #}
+<p class="graph-legend muted">The ports stand at the walls of the module frame:
+<span class="lg lg-in"></span> input, left
+· <span class="lg lg-out"></span> output, right
+· <span class="lg lg-if lg-slant"></span> interface — a slanted green box is a
+stream or a bus; the wide green line carries its data, and the arrow gives the
+direction
+· <span class="lg lg-ctrl"></span> control — the dashed amber line shows which
+module controls what
+· <span class="lg lg-flag"></span> flag / status
+· <span class="lg lg-io"></span> no direction.
+A straight box is a module. A hexagon is a port that goes in two directions.
+A dashed inner box is a generate block. The dashed white node is the logic of
+the module itself: the processes that drive or read a control net. The clock,
+reset, clear and test-mode nets are not in the graph; the chips below the
+diagram give them.</p>

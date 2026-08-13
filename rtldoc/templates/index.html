@@ -35,6 +35,22 @@
 </section>
 {% endif %}
 
+{% for view in top_views %}
+<section class="card">
+  <div class="card-head">
+    <h2>Structure of <a class="mono" href="module-{{ view.name }}.html">{{ view.name }}</a></h2>
+    <a class="textlink" href="module-{{ view.name }}.html">module page →</a>
+  </div>
+  <figure class="graph graph-tall" data-zoom>{{ view.svg|safe }}
+    <figcaption class="graph-tools">
+      <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
+      <span class="graph-hint">scroll or pinch to zoom · drag to move · click a node to open</span>
+    </figcaption>
+  </figure>
+  {% include "_graph_legend.html" %}
+</section>
+{% endfor %}
+
 <section class="card">
   <div class="card-head">
     <h2>Hierarchy</h2>

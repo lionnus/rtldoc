@@ -9,7 +9,7 @@
 
 <div class="page-head">
   <div>
-    <div class="eyebrow">{{ mod.kind }}{% if not mod.elaborated %} · source-only{% endif %}</div>
+    <div class="eyebrow{{ ' eyebrow-if' if mod.kind == 'interface' }}">{{ mod.kind }}{% if not mod.elaborated %} · source-only{% endif %}</div>
     <h1 class="mono">{{ mod.name }}</h1>
     {% if mod.desc and not comment_html %}<p class="lede">{{ mod.desc }}</p>{% endif %}
     <div class="meta-row">
@@ -20,6 +20,7 @@
          title="Read the code">{{ mod.rel_file }}{% if mod.line %}:{{ mod.line }}{% endif %}</a>
       {% elif mod.rel_file %}<span class="pill pill-file mono">{{ mod.rel_file }}{% if mod.line %}:{{ mod.line }}{% endif %}</span>{% endif %}
       {% if mod.elaborated %}<span class="pill pill-ok" title="slang resolved the ports and the widths">elaborated</span>{% endif %}
+      {% if mod.elab_context %}<span class="pill pill-inst mono" title="The parameters, the port widths and the generate branches on this page are those of this instantiation. Another instantiation can differ.">as {{ mod.elab_context }}</span>{% endif %}
       {% if mod.doc_page %}<a class="pill pill-doc" href="{{ mod.doc_page }}.html">documentation</a>{% endif %}
     </div>
   </div>
@@ -49,18 +50,70 @@
       <span class="graph-hint">scroll or pinch to zoom · drag to move · click a node to open</span>
     </figcaption>
   </figure>
-  <p class="graph-legend muted">Blue: an input. Magenta: an output. Green: an interface.
-  Orange: no direction. A hexagon shows a port that goes in two directions. The clock
-  and the reset nets are not in the graph.</p>
+  {% include "_graph_legend.html" %}
 </section>
-{% elif mod.module_instances %}
+{% elif symbol_svg %}
+<section class="card">
+  <div class="card-head"><h2>Interface</h2>
+    <span class="muted">the boundary of <b class="mono">{{ mod.name }}</b> — it instantiates no other module</span></div>
+  <figure class="graph graph-pad" data-zoom>{{ symbol_svg|safe }}
+    <figcaption class="graph-tools">
+      <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
+      <span class="graph-hint">scroll or pinch to zoom · drag to move · click a node to open</span>
+    </figcaption>
+  </figure>
+  {% include "_graph_legend.html" %}
+</section>
+{% elif mod.module_instances or mod.kind == 'interface' %}
 {% else %}
 <section class="card card-flat">
   <p class="muted">This module instantiates no other module.</p>
 </section>
 {% endif %}
 
-{% if mod.clocks or mod.resets %}
+{% if mod.signals %}
+<section class="card">
+  <h2>Signals <span class="pill">{{ mod.signals|length }}</span></h2>
+  <p class="muted">the wires that the two sides of this interface share</p>
+  <div class="tablewrap">
+  <table class="ports">
+    <thead><tr><th>Name</th><th>Type</th><th class="num">Width</th></tr></thead>
+    <tbody>
+      {% for s in mod.signals %}
+      <tr>
+        <td class="mono strong">{{ s.name }}{% set k = s.name|signal_kind %}{% if k %} <span class="kindtag kind-{{ k }}">{{ 'ctrl' if k == 'control' else 'flag' }}</span>{% endif %}</td>
+        <td class="mono ty">{{ s.type }}</td>
+        <td class="num">{% if s.width %}{{ s.width }}{% else %}-{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% if mod.modports %}
+<section class="card">
+  <h2>Modports <span class="pill">{{ mod.modports|length }}</span></h2>
+  <p class="muted">each side of the interface, with the direction of each signal from that side</p>
+  <div class="tablewrap">
+  <table class="ports">
+    <thead><tr><th>Modport</th><th>Drives</th><th>Reads</th></tr></thead>
+    <tbody>
+      {% for mp in mod.modports %}
+      <tr>
+        <td class="mono strong">{{ mp.name }}</td>
+        <td class="mono">{% for p in mp.ports if p.direction == 'out' %}{{ p.name }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+        <td class="mono">{% for p in mp.ports if p.direction == 'in' %}{{ p.name }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% if mod.clocks or mod.resets or mod.clears or mod.test_modes %}
 <section class="card cols">
   {% if mod.clocks %}
   <div>
@@ -75,6 +128,22 @@
     <h2>Resets</h2>
     <div class="chiprow">
       {% for r in mod.resets %}<span class="chip chip-rst">{{ r.name }}<span class="chip-sub">{{ r.name|reset_polarity }}</span></span>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% if mod.clears %}
+  <div>
+    <h2>Clears</h2>
+    <div class="chiprow">
+      {% for c in mod.clears %}<span class="chip chip-rst">{{ c.name }}<span class="chip-sub">synchronous</span></span>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% if mod.test_modes %}
+  <div>
+    <h2>Test / DFT</h2>
+    <div class="chiprow">
+      {% for t in mod.test_modes %}<span class="chip chip-clk">{{ t.name }}</span>{% endfor %}
     </div>
   </div>
   {% endif %}
@@ -95,7 +164,7 @@
       {% for p in ports[g] %}
       <tr>
         <td><span class="dir dir-{{ p.eff_dir }}{{ ' dir-if' if p.is_interface }}">{{ p.eff_dir|dirbadge }}</span></td>
-        <td class="mono strong">{{ p.name }}</td>
+        <td class="mono strong">{{ p.name }}{% set k = p.name|signal_kind %}{% if k %} <span class="kindtag kind-{{ k }}">{{ 'ctrl' if k == 'control' else 'flag' }}</span>{% endif %}</td>
         <td class="mono ty">{% if p.is_interface %}<a href="module-{{ p.interface }}.html">{{ p.interface }}</a>{% if p.modport %} <span class="muted">.{{ p.modport }}</span>{% endif %}{% else %}{{ p.type }}{% endif %}</td>
         <td class="num">{% if p.width %}{{ p.width }}{% else %}-{% endif %}</td>
       </tr>

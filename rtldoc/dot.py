@@ -24,14 +24,25 @@ C_NET_TXT = "#475569"
 C_IN = "#2563eb"        # An input
 C_OUT = "#c81d77"       # An output
 C_IO = "#b45309"        # No direction: the signals go both ways
+# The signal kinds that a name gives. Control and status make the control plane;
+# the arrows of the control edges show which module controls what.
+C_CTRL = "#d97706"      # A control signal: one module sets the behaviour of another
+C_STATUS = "#9333ea"    # A flag or status signal: the answer that control receives
+# An interface edge is a stream or a bus. It is wider than a wire, thus the data
+# path stands out, and the arrow gives the direction of the data.
+IFACE_PENWIDTH = 1.6
 
 # `cds` draws about two thirds of the height of its node, and `hexagon` draws the
 # full height. These values give each pin and each signal the same height.
 PIN_CDS = 'shape=cds, height=0.37, margin="0.16,0.0"'
 PIN_HEX = 'shape=hexagon, height=0.25, margin="0.16,0.0"'
 NET_BOX = 'shape=box, height=0.25, margin="0.10,0.0"'
+# An interface is not a module and not a wire: the slanted box tells it apart
+# from the straight box of an instance, in each graph and at each size.
+IFACE_BOX = 'shape=parallelogram, height=0.3, margin="0.05,0.02"'
 C_CLUSTER = "#f1f5f9"   # Fill of the module boundary
 C_CLUSTER_LINE = "#cbd5e1"
+C_GEN = "#e8edf4"       # Fill of a generate block inside the module boundary
 EDGE = "#94a3b8"
 FONT = "IBM Plex Sans"
 FONT_MONO = "IBM Plex Mono"
@@ -55,11 +66,15 @@ def render_dot(dot: str) -> str | None:
     return svg[i:] if i >= 0 else svg
 
 
-def header(rankdir: str = "TB") -> str:
+def header(rankdir: str = "TB", newrank: bool = False) -> str:
+    # `newrank` ranks the whole graph in one pass, thus a rank constraint holds
+    # against the contents of a cluster. The schematic needs it for the pin
+    # columns; the flat graphs do not.
     return (
         "digraph G {\n"
         f"  rankdir={rankdir};\n"
-        '  bgcolor="transparent";\n'
+        + ("  newrank=true;\n" if newrank else "")
+        + '  bgcolor="transparent";\n'
         f'  graph [fontname="{FONT}"];\n'
         f'  node [shape=box, style=filled, penwidth=0, fontname="{FONT}", '
         'fontsize=11, margin="0.16,0.07"];\n'
@@ -69,12 +84,29 @@ def header(rankdir: str = "TB") -> str:
     )
 
 
-def edge(a: str, b: str, label: str = "", directed: bool = True) -> str:
+def edge(a: str, b: str, label: str = "", directed: bool = True,
+         color: str = "", penwidth: float | None = None,
+         dashed: bool = False, constraint: bool = True,
+         weight: int | None = None) -> str:
     extra = []
     if label:
         extra.append(f'label="{html.escape(label)}"')
+    if weight is not None:
+        # A heavy edge is drawn straighter. The wire of a pin gets weight,
+        # thus the pin stands at the height of its partner.
+        extra.append(f"weight={weight}")
     if not directed:
         extra.append("dir=none")
+    if color:
+        extra.append(f'color="{color}"')
+    if penwidth is not None:
+        extra.append(f"penwidth={penwidth}")
+    if dashed:
+        extra.append('style="dashed"')
+    if not constraint:
+        # The edge is drawn, but it does not rank its ends. A wire to a pin
+        # must not pull the pin out of its column.
+        extra.append("constraint=false")
     if extra:
         return f'  "{a}" -> "{b}" [{", ".join(extra)}];'
     return f'  "{a}" -> "{b}";'

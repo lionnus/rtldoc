@@ -57,6 +57,7 @@ def build_documentation(project_root: str = ".", outdir: str | None = None,
     design = extract_design(
         root, tops=list(config.tops) + list(tops or []), log=log
     )
+    design.conventions = config.conventions
     render_site(
         design, out, title=config.name,
         doc_dirs=config.doc_dirs if config.docs_enabled else None,

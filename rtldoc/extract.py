@@ -25,7 +25,7 @@ import re
 from .bender import BenderInfo
 from .comments import doc_comments, summary
 from .deps import HAVE_PYSLANG, Driver  # `deps` probes pyslang
-from .model import Design, Instance, Module, Param, Port, PortConn
+from .model import Design, Instance, Modport, Module, Param, Port, PortConn
 
 # --- Functions that read the source text ------------------------------------
 
@@ -62,28 +62,31 @@ def _kind(sym) -> str:
 
 
 def _direct_instances(body) -> list:
-    """The child instances of a module, with the name of each one.
+    """The child instances of a module: (symbol, name, generate block).
 
     Includes the generate blocks and the arrays. An element of an array has no
-    name of its own, thus the array gives the name to each element.
+    name of its own, thus the array gives the name to each element. The name of
+    the generate block that holds an instance travels with it; a block inside a
+    block keeps the outermost name, because that is the name in the source.
     """
     found: list = []
 
-    def walk(scope, name=""):
+    def walk(scope, name="", gen=""):
         for m in scope:
             k = _kind(m)
-            if k == "InstanceSymbol":
-                found.append((m, name or m.name))
+            if k in ("InstanceSymbol", "UninstantiatedDefSymbol"):
+                found.append((m, name or m.name, gen))
             elif k == "InstanceArraySymbol":
                 # `hci_core_intf virt_tcdm [1:0] (...)` declares an array. Without
                 # this, an interface array and a module array are not in the model.
-                walk(m, name or getattr(m, "name", ""))
-            elif k in (
-                "GenerateBlockSymbol",
-                "GenerateBlockArraySymbol",
-                "StatementBlockSymbol",
-            ):
-                walk(m)
+                walk(m, name or getattr(m, "name", ""), gen)
+            elif k in ("GenerateBlockSymbol", "GenerateBlockArraySymbol"):
+                # The branch of an `if`-generate that the parameters did not
+                # take still has symbols. Its hardware does not exist.
+                if not getattr(m, "isUninstantiated", False):
+                    walk(m, name, gen or getattr(m, "name", ""))
+            elif k == "StatementBlockSymbol":
+                walk(m, name, gen)
 
     walk(body)
     return found
@@ -168,7 +171,7 @@ def _net_text(expr, sm) -> str:
     return ""
 
 
-def _instance_from_symbol(inst, sm, name: str = "") -> Instance:
+def _instance_from_symbol(inst, sm, name: str = "", gen: str = "") -> Instance:
     body = inst.body
     defn = getattr(body, "definition", None)
     module = defn.name if defn is not None else getattr(body, "name", "?")
@@ -185,16 +188,34 @@ def _instance_from_symbol(inst, sm, name: str = "") -> Instance:
         conns.append(PortConn(port=pname, net=net, is_interface=is_if, modport=modport))
     return Instance(
         name=name or inst.name, module=module, params=params, conns=conns,
-        is_interface=is_iface,
+        is_interface=is_iface, gen_block=gen,
+    )
+
+
+def _instance_from_uninstantiated(sym, sm, name: str = "", gen: str = "") -> Instance:
+    """An instance of a module that no source file declares: a black box.
+
+    slang cannot resolve its ports, but the port names and the connected
+    expressions are in the symbol. Thus the box and its nets are in the graph,
+    in place of a hole where the missing module is.
+    """
+    names = list(getattr(sym, "portNames", []) or [])
+    conns = []
+    for i, pc in enumerate(getattr(sym, "portConnections", []) or []):
+        net = _net_text(getattr(pc, "expr", None), sm)
+        conns.append(PortConn(port=names[i] if i < len(names) else "", net=net))
+    return Instance(
+        name=name or sym.name, module=getattr(sym, "definitionName", "") or "?",
+        conns=conns, unknown=True, gen_block=gen,
     )
 
 
 def _collapse_instances(raw: list[Instance]) -> list[Instance]:
     """Makes one instance from the copies that a generate loop or an array makes."""
-    out: dict[tuple[str, str], Instance] = {}
-    order: list[tuple[str, str]] = []
+    out: dict[tuple[str, str, str], Instance] = {}
+    order: list[tuple[str, str, str]] = []
     for inst in raw:
-        key = (inst.name, inst.module)
+        key = (inst.name, inst.module, inst.gen_block)
         if key in out:
             out[key].count += 1
             out[key].array = True
@@ -245,9 +266,45 @@ def _module_from_body(body, sm) -> Module:
             pname = getattr(pkg, "name", "") if pkg is not None else ""
             if pname and pname not in mod.imports:
                 mod.imports.append(pname)
-    raw = [_instance_from_symbol(i, sm, name) for i, name in _direct_instances(body)]
+    raw = [
+        _instance_from_uninstantiated(i, sm, name, gen)
+        if _kind(i) == "UninstantiatedDefSymbol"
+        else _instance_from_symbol(i, sm, name, gen)
+        for i, name, gen in _direct_instances(body)
+    ]
     mod.instances = _collapse_instances(raw)
+    if mod.kind == "interface":
+        _interface_contents(body, mod)
     return mod
+
+
+def _interface_contents(body, mod: Module) -> None:
+    """The signals and the modports of an interface.
+
+    These are what an interface is: a module has ports and instances, an
+    interface has the signals that the two sides share, and one modport for
+    each side. Without them, the page of an interface is empty.
+    """
+    port_names = {p.name for p in mod.ports}
+    for m in body:
+        k = _kind(m)
+        if k == "VariableSymbol" and m.name not in port_names:
+            t = getattr(m, "type", None)
+            width = getattr(t, "bitWidth", None) if t is not None else None
+            mod.signals.append(Port(
+                name=m.name, direction="",
+                type=str(t) if t is not None else "",
+                width=width if width else None,
+            ))
+        elif k == "ModportSymbol":
+            mp = Modport(name=m.name)
+            for p in m:
+                if _kind(p) == "ModportPortSymbol":
+                    mp.ports.append(Port(
+                        name=getattr(p, "name", ""),
+                        direction=_dir_str(getattr(p, "direction", "")),
+                    ))
+            mod.modports.append(mp)
 
 
 # --- The main function ------------------------------------------------------
@@ -293,28 +350,57 @@ def extract_design(
     comp = driver.createCompilation()
     sm = comp.sourceManager
 
-    # The walk goes down the instance tree of each top. Each definition gives
-    # one module.
+    # Every owned module is a top, thus every owned module elaborates - also
+    # alone, with its default parameters. The reader clicks from a parent into
+    # a child, thus the page of the child must show the child as the parent
+    # builds it: the parameters of the instantiation decide the widths and the
+    # generate branches. The first pass takes each module from the tree of a
+    # parent; only a module that no parent instantiates keeps its default
+    # elaboration, in the second pass. The trees of the true design tops come
+    # first, thus the context is the real hierarchy and not an artificial top.
+    root = comp.getRoot()
+    tops_insts = list(root.topInstances)
+
+    def def_name(inst) -> str:
+        defn = getattr(inst.body, "definition", None)
+        return defn.name if defn is not None else getattr(inst.body, "name", "")
+
+    child_defs: set[str] = set()
+    for top in tops_insts:
+        def scan(sym, top=top):
+            if _kind(sym) == "InstanceSymbol" and sym is not top:
+                child_defs.add(def_name(sym))
+        try:
+            top.visit(scan)
+        except Exception:
+            pass
+    ordered = ([t for t in tops_insts if def_name(t) not in child_defs]
+               + [t for t in tops_insts if def_name(t) in child_defs])
+
     seen: set[str] = set()
 
-    def visit(sym):
-        if _kind(sym) == "InstanceSymbol":
-            body = sym.body
-            defn = getattr(body, "definition", None)
-            dname = defn.name if defn is not None else getattr(body, "name", "")
-            if dname and dname not in seen:
-                seen.add(dname)
-                try:
-                    design.modules[dname] = _module_from_body(body, sm)
-                except Exception as exc:  # One bad module must not stop the run
-                    design.diagnostics.append(f"extract {dname}: {exc}")
+    def collect(sym, context: str = "") -> None:
+        dname = def_name(sym)
+        if not dname or dname in seen:
+            return
+        seen.add(dname)
+        try:
+            mod = _module_from_body(sym.body, sm)
+            mod.elab_context = context
+            design.modules[dname] = mod
+        except Exception as exc:  # One bad module must not stop the run
+            design.diagnostics.append(f"extract {dname}: {exc}")
 
-    root = comp.getRoot()
-    for top in root.topInstances:
+    for top in ordered:
+        def visit(sym, top=top):
+            if _kind(sym) == "InstanceSymbol" and sym is not top:
+                collect(sym, str(getattr(sym, "hierarchicalPath", "") or ""))
         try:
             top.visit(visit)
         except Exception as exc:
             design.diagnostics.append(f"visit {top.name}: {exc}")
+    for top in ordered:
+        collect(top)
 
     # A module of the root package that slang did not elaborate keeps a page.
     for name in owned_modules:

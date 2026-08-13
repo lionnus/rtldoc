@@ -160,10 +160,83 @@ workflows of this repository use the same command as a user does.
 - The colour of a pin gives the kind, and the shape gives the direction. Blue is
   an input, magenta an output, green an interface and orange no direction. These
   are the colours of the port table, thus the graph and the table agree.
-- The direction of a logic port comes from the declaration. An interface port has
-  no direction in the language: the name gives it (`_i`, `_in`, `_o`, `_out`),
-  then the modport. A port that gives neither is a hexagon: the signals go in two
-  directions. The name comes before the modport, because a person reads the name.
+- The kind of a signal has a colour and an edge style, thus the data path and
+  the control plane separate. A control signal (`ctrl`, `cfg`, `en`, `sel`, ...)
+  is amber and dashed; the arrows of its edges show which module controls what.
+  A flag or status signal (`flags`, `busy`, `done`, `evt`, ...) is violet and
+  dashed: the answer that control receives. The common tokens are in `naming`,
+  and the match is per word part, thus `len_i` is not an enable. Each code base
+  names these signals in its own way, thus `conventions:` in `rtldoc.yml` gives
+  extra regular expressions per kind; a rule of the project comes before the
+  common tokens, and a rule that does not compile is ignored. The port table
+  marks the same ports with the same rules, thus the two agree.
+- An interface edge is wide and green: a stream or a bus is the data path, not
+  one wire. The modport of each connection labels its edge, thus a
+  `hwpe_stream` shows `source → sink` — the direction of the data — by name and
+  by arrow.
+- An interface is a slanted green box, everywhere: the hub of a stream, the
+  symbol of an interface page. A straight box is a module. Colour alone did not
+  tell the two apart, because a net hub and an instance are both boxes.
+- The ports stand inside the module frame, at its walls: the input rail at the
+  left edge, the output rail at the right edge. Thus the frame owns its ports,
+  and a wire from a rail runs inside the frame instead of around it. Before,
+  the pins floated outside the box and their wires arced around it.
+- The page of an interface shows its signals - the wires that the two sides
+  share, with the widths of the instantiation - and its modports, with what
+  each side drives and reads. A module has ports and instances; an interface
+  has these. Without them the page of `hci_core_intf` was one clock and a
+  parameter table.
+- The overview shows each top (at most four) with the same block diagram as its
+  module page, thus the first page and the page of a module read the same way.
+  One legend template serves both pages.
+- A control or status net that touches one instance only keeps its single end:
+  its other side is the logic of the module itself, drawn as one dashed node.
+  On the datamover, the FSM of `datamover_top` drives `streamer_ctrl` and reads
+  `streamer_flags`; without that node, the whole control plane of the module was
+  invisible, because a net with one instance is not a connection between two
+  instances. A control or status port that only an `assign` drives (`evt_o`)
+  gets its pin the same way. Data nets keep the two-ends rule, because a
+  dangling data net is noise.
+- A module with no child instance gets the symbol view: one block with its pins
+  around it, with the same colours and the modport on each interface edge. Thus
+  each page of the site has a drawing, and a leaf like `hci_core_assign` shows
+  `target → module → initiator` at a glance.
+- A named generate block is a dashed cluster inside the module, thus
+  `use_fifo_gen` in the datamover streamer reads as one optional group. A plain
+  instance array stays one node with `xN`.
+- The branch of an `if`-generate that the parameters did not take is dropped:
+  slang keeps its symbols, but `isUninstantiated` marks them. Before this rule,
+  the streamer showed the FIFO path and the no-FIFO path at the same time, as if
+  both existed.
+- An instance of a module that no source declares (an `UninstantiatedDefSymbol`)
+  is in the model as a black box, with its port names and its nets. Before, it
+  was a hole: `demo_missing_cell` was not even a node.
+- The page of a module shows the module as its parent instantiates it, not as
+  its defaults build it. The parameters of the instantiation decide the widths
+  and the generate branches, thus the reader who clicks from a parent into a
+  child sees the same hardware on both pages. The pill `as top.i_streamer`
+  names the instantiation. A true top - a module that nothing instantiates -
+  shows its defaults, because it has no parent. The extraction runs in two
+  passes: the trees of the true tops first, each child from the tree of its
+  parent; then the leftover tops with their defaults.
+- The clock, the reset, the synchronous clear and the test-mode nets stay out
+  of the graph: each of them touches each instance, and hides the data flow.
+  The page shows them as chips - Clocks, Resets, Clears, Test / DFT - and the
+  port table still lists them.
+- The pins hug the module box in two columns: the inputs at the left edge, the
+  outputs and the two-way ports at the right edge. Graphviz gives this only
+  with three mechanisms at once: one `rank` group per side with an invisible
+  anchor, invisible wall edges that put every inner node between the anchors,
+  and `newrank=true` so the ranks hold against the cluster. A wire that runs
+  against the side of its pin keeps `constraint=false`, or the ranking becomes
+  infeasible and Graphviz places the pins anywhere.
+- The direction of a logic port comes from the declaration. An interface port
+  has no direction in the language: the modport gives it first, because the
+  compiler checked the modport, and the name (`_i`, `_in`, `_o`, `_out`) decides
+  only when there is no modport. On the HWPE streamer,
+  `hwpe_stream_intf_stream.source data_in` is an output; the name says the
+  other way, thus a name-first rule drew the stream on the wrong side. A port
+  that gives neither is a hexagon: the signals go in two directions.
 - `cds` draws about two thirds of the height of its node and `hexagon` draws the
   full height. Each pin gets the height that makes the two the same.
 - A node opens what it shows: an instance opens the module, an interface port and
@@ -194,7 +267,7 @@ workflows of this repository use the same command as a user does.
 
 ### The package layout
 
-- 17 modules, each with one subject, and no module above 370 lines. The layers
+- 18 modules, each with one subject, and no module above 400 lines. The layers
   are in the docstring of `rtldoc/__init__.py`, from `naming` and `model` at
   the bottom to `cli` at the top.
 - `tests/test_architecture.py` reads the imports of each module and stops a
@@ -206,7 +279,9 @@ workflows of this repository use the same command as a user does.
 - The splits: `naming` (the rules that read a name) out of `model`; `comments`
   (the comment above a unit) out of `extract`; `markup` (Markdown,
   reStructuredText and Doxygen) out of `docs`; `dot` (the colours, the DOT syntax
-  and the Graphviz process) out of `graphs`; `api` (the two steps) out of `cli`.
+  and the Graphviz process) out of `graphs`; `schematic` (the inside of one
+  module: the netlist view and the symbol view) out of `graphs`; `api` (the two
+  steps) out of `cli`.
 
 ## Known limitations
 
@@ -223,38 +298,64 @@ workflows of this repository use the same command as a user does.
   elaborated; dependency modules that are never instantiated appear as black boxes.
 - Connection grouping uses the base signal name, so a bit-select and the full
   signal are treated as the same net.
+- The kind of a signal comes from its name, not from its use. A control net with
+  a name that says nothing (`q`, `word`) stays grey, and the internal-logic node
+  appears only for a control or status net. Tracing use needs the processes.
+- A module that is instantiated several times with different parameters has one
+  page: the first instantiation found, from the tree of a true top. The pill
+  names it, thus the reader knows which configuration they see.
 
 ## Future ideas
 
-### Visualising generate blocks (evaluated)
+### Visualising generate blocks (done)
 
-Possible: yes. Sensible: yes, for designs that use generate heavily.
+Implemented as evaluated: each instance carries the name of the generate block
+that holds it (`Instance.gen_block`), and the graph draws one dashed cluster per
+named block inside the module boundary. A flat `xN` collapse stays for the
+copies of a loop, thus a simple loop is still one node. The blocks of an
+`if`-generate that the parameters did not take are dropped
+(`isUninstantiated`). The resolved loop range and the branch condition are not
+yet in the label; slang has them, and the label has room.
 
-slang exposes the generate structure in the elaborated AST as
-`GenerateBlockArraySymbol` (for `for`-generate) and `GenerateBlockSymbol` (for
-`if`/`case`-generate), each with a name and the resolved loop range or branch
-condition. The extractor currently descends into these blocks and flattens them:
-loop copies of an instance are collapsed into a single `name xN` entry, and a
-conditional generate is represented by whichever branch elaborated.
+### Git: the commit of a module, and the diff of an interface (evaluated)
 
-To show them, each generate block becomes a Graphviz cluster inside the cluster of
-the module boundary, because a cluster can hold another cluster. The label gives the
-name of the block and its condition, for example `for genvar i in [0:N]` or
-`if (FEATURE_EN)`. Each instance of that block is then in its cluster. The graph
-needs no new mechanism, thus the cost is small. The work is in the model: it must
-keep the generate blocks, and not make one list of the instances. That needs a
-`GenerateBlock` node between `Module` and `Instance`.
+Possible: yes. Sensible: yes, in two separate steps.
 
-Trade-offs: deeper nesting makes the layout busier for designs with many small
-generate blocks, and a flat `xN` summary is often easier to read for a simple loop.
-Recommendation: add it as a grouping that is applied when a module has named
-generate blocks, and keep the `xN` collapse for plain instance arrays. Medium
-effort, good payoff for parameterised or conditionally-built modules.
+**The commit of each module.** The project root is normally a git repository
+(`project.git_root` finds it today). One `git log -1 --format=%h%x09%ad%x09%an
+-- <file>` per source file gives the hash, the date and the author of the last
+change. The module page then gets one more pill — `changed 2026-08-02 in
+a1b2c3d` — and the pill can link to the commit in the web view of the host
+(GitHub, GitLab), when `rtldoc.yml` gives the URL pattern. The cost is one git
+call per file of the root package; a dependency stays out, because its checkout
+often has no history. The layering fits: a new `gitinfo` module beside `bender`
+reads the repository, the extractor stores the result in the model, and the
+renderer shows it. `git blame` per port is possible with the line numbers that
+the model has, but one blame per file is slow on a large repository — leave it
+until someone asks.
+
+**The diff of an interface.** `model.json` already holds each port with its
+resolved type and width, each parameter value and each instance. A command
+`rtldoc diff old-model.json new-model.json` compares two builds and reports the
+modules whose boundary changed: a port added or removed, a width or a type
+changed, a parameter default changed. That is the question a reviewer asks —
+"did this change the interface?" — and CI can post the answer on a pull request.
+The comparison needs no git and no elaboration of the old revision: the old
+`model.json` comes from the last published site or from an artifact. A
+`--fail-on-change` flag makes it a check. This is the natural first git-related
+step, because the data is already there.
 
 ### Other ideas
 
 - Clock and reset domain map: trace clock and reset nets across the hierarchy and
   show domains and crossings, instead of per-module name detection.
+- Control tracing by connectivity: today the name gives the kind of a signal.
+  The elaborated AST could give it instead — a net that drives only enable or
+  select inputs is control by use, not by name. That removes the conventions
+  from the model, at the cost of reading every process.
+- A doc-site diff summary on the index page: "since the last build: 2 modules
+  changed, 1 port added" — the last `model.json` is in the output directory
+  before `gen` cleans it, thus the comparison is free.
 - Bit-accurate connectivity: distinguish bit-selects and struct fields so partial
   connections are visible.
 - Source links: link each module and port to its line in a repo web view.

@@ -320,6 +320,41 @@ def test_generate_loops_collapse_into_one_instance(run_cli, project_dir, stub_be
     assert len(stages) == 1
     assert stages[0]["count"] == 4
     assert stages[0]["array"] is True
+    assert stages[0]["gen_block"] == "gen_stage", "the name of the loop travels"
+    opt = [i for i in model["modules"]["demo_gen"]["instances"]
+           if i["name"] == "i_missing"]
+    assert opt[0]["gen_block"] == "gen_opt", "an if-generate keeps its name"
+    assert opt[0]["unknown"] is True, "a black box is an instance too"
+    names = [i["name"] for i in model["modules"]["demo_gen"]["instances"]]
+    assert "i_dead" not in names, "the untaken generate branch does not exist"
+
+
+def test_a_module_page_shows_the_instantiated_version(run_cli, project_dir, stub_bender):
+    """A parent instantiates demo_adder, thus the page of demo_adder shows the
+    parameters of that instantiation, and names it. A top shows its defaults."""
+    assert _gen(run_cli, project_dir) == 0
+    model = json.loads((project_dir / project.DEFAULT_OUTPUT / "model.json").read_text())
+    assert model["modules"]["demo_top"]["elab_context"] == "", "a top has no parent"
+    ctx = model["modules"]["demo_adder"]["elab_context"]
+    assert ctx and "." in ctx, "a child names the instantiation it comes from"
+    page = (project_dir / project.DEFAULT_OUTPUT / "module-demo_adder.html").read_text()
+    assert ctx in page, "the page tells the reader which instantiation it shows"
+
+
+def test_an_interface_page_shows_its_signals_and_modports(run_cli, project_dir,
+                                                          stub_bender):
+    """A module has ports and instances; an interface has shared signals and
+    one modport per side. The page must show what the interface is."""
+    assert _gen(run_cli, project_dir) == 0
+    model = json.loads((project_dir / project.DEFAULT_OUTPUT / "model.json").read_text())
+    bus = model["modules"]["demo_bus_if"]
+    assert {s["name"] for s in bus["signals"]} == {"data", "valid", "ready"}
+    mps = {m["name"]: m for m in bus["modports"]}
+    assert set(mps) == {"master", "slave"}
+    assert {p["name"] for p in mps["master"]["ports"]
+            if p["direction"] == "out"} == {"data", "valid"}
+    page = (project_dir / project.DEFAULT_OUTPUT / "module-demo_bus_if.html").read_text()
+    assert "Modports" in page and "Signals" in page
 
 
 def test_init_keeps_an_existing_config(run_cli, project_dir, capsys):

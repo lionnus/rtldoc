@@ -17,6 +17,7 @@
   --bg:#ffffff; --bg-2:#f6f8fa; --bg-3:#eceff3; --bg-4:#e2e7ee;
   --text:#0f172a; --text-2:#3f4d60; --muted:#6b7785;
   --in:#2563eb; --out:#c81d77; --io:#b45309; --ifc:#0d9488; --clk:#7c3aed; --rst:#b91c1c;
+  --ctl:#d97706; --flg:#9333ea;
   --sans:"IBM Plex Sans", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
 }
@@ -25,6 +26,7 @@
   --bg:#0c1118; --bg-2:#121821; --bg-3:#1a222e; --bg-4:#26303d;
   --text:#e8eef6; --text-2:#b3c0d1; --muted:#808d9f;
   --in:#5b9bff; --out:#f472b6; --io:#fbbf24; --ifc:#2dd4bf; --clk:#a78bfa; --rst:#f87171;
+  --ctl:#f59e0b; --flg:#c084fc;
 }
 * { box-sizing:border-box; }
 body { margin:0; font-family:var(--sans); color:var(--text); background:var(--bg);
@@ -128,6 +130,10 @@ a.stat:hover { background:var(--bg-3); text-decoration:none; }
 .pill-pkg { background:var(--accent-weak); color:var(--accent); }
 .pill-file { background:var(--bg-3); color:var(--muted); }
 .pill-ok { background:color-mix(in srgb,var(--teal) 16%,transparent); color:var(--teal); }
+/* The instantiation whose parameters the page shows */
+.pill-inst { background:var(--bg-3); color:var(--text-2); overflow-wrap:anywhere; }
+/* The page of an interface carries its colour, thus the kind is clear */
+.eyebrow-if { color:var(--ifc); }
 a.pill:hover { text-decoration:none; filter:brightness(.96); }
 .chiprow { display:flex; flex-wrap:wrap; gap:7px; }
 .chip { display:inline-flex; flex-direction:column; padding:7px 12px; background:var(--bg-3);
@@ -162,6 +168,11 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
 .dir-inout { background:color-mix(in srgb,var(--io) 18%,transparent); color:var(--io); }
 .dir-interface { background:color-mix(in srgb,var(--ifc) 15%,transparent); color:var(--ifc); }
 .dir-if { box-shadow:inset 0 -2px 0 var(--ifc); }  /* marks an interface port */
+/* The kind of a signal, from its name. The graph uses the same colours. */
+.kindtag { display:inline-block; font-family:var(--sans); font-size:.72em; font-weight:600;
+  padding:0 5px; vertical-align:1px; letter-spacing:.02em; }
+.kind-control { background:color-mix(in srgb,var(--ctl) 16%,transparent); color:var(--ctl); }
+.kind-status { background:color-mix(in srgb,var(--flg) 14%,transparent); color:var(--flg); }
 
 /* ---- module cards grid ---- */
 .cardgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:2px; background:var(--bg-3); }
@@ -173,6 +184,9 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
 /* ---- graphs ---- */
 .graph { position:relative; margin:0; background:var(--bg); overflow:hidden; }
 .graph-tall { min-height:50vh; }
+/* A short graph (the symbol of a leaf module) needs room under the drawing,
+   or the zoom buttons sit on it. */
+.graph-pad svg.rtld-graph { margin-bottom:44px; }
 /* One finger scrolls the page and a tap opens a node. Two fingers pinch to
    zoom and move the graph: `pinch-zoom` is not in the list, thus the browser
    gives those events to the page. */
@@ -185,6 +199,7 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
 [data-theme="dark"] .graph svg.rtld-graph polygon[fill="white"] { fill:#1a222e !important; }
 [data-theme="dark"] .graph svg.rtld-graph polygon[fill="#f1f5f9"] { fill:#141b25 !important; }
 [data-theme="dark"] .graph svg.rtld-graph polygon[fill="#e2e8f0"] { fill:#26303d !important; }
+[data-theme="dark"] .graph svg.rtld-graph polygon[fill="#e8edf4"] { fill:#1e2836 !important; }
 .graph-tools { position:absolute; right:12px; bottom:12px; display:flex; align-items:center; gap:6px;
   background:var(--bg-2); padding:5px 9px; font-size:.8em; }
 .graph-tools button { background:var(--bg-3); border:0; width:26px; height:24px; cursor:pointer;
@@ -193,6 +208,12 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
 .graph-tools button[data-zoom-reset] { width:auto; padding:0 9px; }
 .graph-hint { color:var(--muted); margin-left:4px; }
 .graph-legend { font-size:.82em; margin:10px 2px 0; }
+/* The swatches of the legend */
+.lg { display:inline-block; width:10px; height:10px; vertical-align:-1px; }
+.lg-slant { transform:skewX(-18deg); }
+.lg-in { background:var(--in); } .lg-out { background:var(--out); }
+.lg-if { background:var(--ifc); } .lg-io { background:var(--io); }
+.lg-ctrl { background:var(--ctl); } .lg-flag { background:var(--flg); }
 
 /* ---- misc ---- */
 .empty { color:var(--muted); padding:18px; text-align:center; }

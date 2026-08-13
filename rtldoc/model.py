@@ -11,7 +11,14 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import Any
 
-from .naming import interface_dir, is_clock, is_reset, name_direction
+from .naming import (
+    interface_dir,
+    is_clear,
+    is_clock,
+    is_reset,
+    is_test_mode,
+    name_direction,
+)
 
 
 @dataclass
@@ -49,18 +56,26 @@ class Port:
         """The direction to draw: `in`, `out`, or `` for a port with no direction.
 
         The language gives the direction of a logic port. An interface port has
-        no direction: the name gives it, and then the modport. An interface port
-        with no other data goes in two directions.
+        no direction, but its modport is a fact that the compiler checked: it
+        comes first. The name (`_i`, `_in`, ...) decides when there is no
+        modport, and a port that gives neither goes in two directions.
         """
         if not self.is_interface:
             if self.direction in ("in", "out"):
                 return self.direction
             return name_direction(self.name)
-        named = name_direction(self.name)
-        if named:
-            return named
         modport = interface_dir(self.modport)
-        return modport if modport in ("in", "out") else ""
+        if modport in ("in", "out"):
+            return modport
+        return name_direction(self.name)
+
+
+@dataclass
+class Modport:
+    """One modport of an interface: the view of one side of the connection."""
+
+    name: str
+    ports: list[Port] = field(default_factory=list)   # name and direction
 
 
 @dataclass
@@ -85,6 +100,7 @@ class Instance:
     conns: list[PortConn] = field(default_factory=list)
     unknown: bool = False      # The module was not found. It is a black box
     is_interface: bool = False  # An interface instance, not a child module
+    gen_block: str = ""        # The generate block that holds the instance
 
 
 @dataclass
@@ -97,6 +113,10 @@ class Module:
     ports: list[Port] = field(default_factory=list)
     instances: list[Instance] = field(default_factory=list)
     imports: list[str] = field(default_factory=list)        # Imported packages
+    #: For an interface: the signals that it declares, and its modports. These
+    #: are what an interface is; a module has ports and instances instead.
+    signals: list[Port] = field(default_factory=list)
+    modports: list[Modport] = field(default_factory=list)
     # Where the module comes from
     file: str = ""             # The absolute path of the source file
     rel_file: str = ""         # The path from the project root
@@ -105,6 +125,9 @@ class Module:
     desc: str = ""             # The first sentence of the comment
     doc_comment: str = ""      # The full comment above the declaration
     elaborated: bool = False   # True if slang resolved the ports and the types
+    #: The hierarchical path of the instantiation whose parameters this page
+    #: shows (`dm_top.i_streamer`). Empty for a top: it shows its defaults.
+    elab_context: str = ""
     # Filled after the extraction
     instantiated_by: list[str] = field(default_factory=list)
     doc_page: str = ""         # The written page that documents this module
@@ -124,6 +147,16 @@ class Module:
     @property
     def resets(self) -> list[Port]:
         return [p for p in self.ports if is_reset(p.name)]
+
+    @property
+    def clears(self) -> list[Port]:
+        """The synchronous clears. A clear acts as a reset."""
+        return [p for p in self.ports if is_clear(p.name)]
+
+    @property
+    def test_modes(self) -> list[Port]:
+        """The DFT signals: test mode, scan, bist."""
+        return [p for p in self.ports if is_test_mode(p.name)]
 
     @property
     def module_instances(self) -> list[Instance]:
@@ -196,6 +229,9 @@ class Design:
     generated_at: str = ""
     tool_version: str = ""
     diagnostics: list[str] = field(default_factory=list)   # Warnings
+    #: The naming rules of this code base, from `rtldoc.yml`. The keys are
+    #: `control` and `status`; each value is a list of regular expressions.
+    conventions: dict[str, list[str]] = field(default_factory=dict)
 
     def to_json(self) -> dict[str, Any]:
         """The model as JSON. The code of each file is not in it, because the
