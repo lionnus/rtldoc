@@ -49,18 +49,18 @@ class Port:
         """The direction to draw: `in`, `out`, or `` for a port with no direction.
 
         The language gives the direction of a logic port. An interface port has
-        no direction: the name gives it, and then the modport. An interface port
-        with no other data goes in two directions.
+        no direction, but its modport is a fact that the compiler checked: it
+        comes first. The name (`_i`, `_in`, ...) decides when there is no
+        modport, and a port that gives neither goes in two directions.
         """
         if not self.is_interface:
             if self.direction in ("in", "out"):
                 return self.direction
             return name_direction(self.name)
-        named = name_direction(self.name)
-        if named:
-            return named
         modport = interface_dir(self.modport)
-        return modport if modport in ("in", "out") else ""
+        if modport in ("in", "out"):
+            return modport
+        return name_direction(self.name)
 
 
 @dataclass
@@ -85,6 +85,7 @@ class Instance:
     conns: list[PortConn] = field(default_factory=list)
     unknown: bool = False      # The module was not found. It is a black box
     is_interface: bool = False  # An interface instance, not a child module
+    gen_block: str = ""        # The generate block that holds the instance
 
 
 @dataclass

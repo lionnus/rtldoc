@@ -180,6 +180,9 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
 /* ---- graphs ---- */
 .graph { position:relative; margin:0; background:var(--bg); overflow:hidden; }
 .graph-tall { min-height:50vh; }
+/* A short graph (the symbol of a leaf module) needs room under the drawing,
+   or the zoom buttons sit on it. */
+.graph-pad svg.rtld-graph { margin-bottom:44px; }
 /* One finger scrolls the page and a tap opens a node. Two fingers pinch to
    zoom and move the graph: `pinch-zoom` is not in the list, thus the browser
    gives those events to the page. */
@@ -192,6 +195,7 @@ th.num, td.num { text-align:right; font-variant-numeric:tabular-nums; }
 [data-theme="dark"] .graph svg.rtld-graph polygon[fill="white"] { fill:#1a222e !important; }
 [data-theme="dark"] .graph svg.rtld-graph polygon[fill="#f1f5f9"] { fill:#141b25 !important; }
 [data-theme="dark"] .graph svg.rtld-graph polygon[fill="#e2e8f0"] { fill:#26303d !important; }
+[data-theme="dark"] .graph svg.rtld-graph polygon[fill="#e8edf4"] { fill:#1e2836 !important; }
 .graph-tools { position:absolute; right:12px; bottom:12px; display:flex; align-items:center; gap:6px;
   background:var(--bg-2); padding:5px 9px; font-size:.8em; }
 .graph-tools button { background:var(--bg-3); border:0; width:26px; height:24px; cursor:pointer;

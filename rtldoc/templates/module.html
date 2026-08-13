@@ -51,6 +51,18 @@
   </figure>
   {% include "_graph_legend.html" %}
 </section>
+{% elif symbol_svg %}
+<section class="card">
+  <div class="card-head"><h2>Interface</h2>
+    <span class="muted">the boundary of <b class="mono">{{ mod.name }}</b> — it instantiates no other module</span></div>
+  <figure class="graph graph-pad" data-zoom>{{ symbol_svg|safe }}
+    <figcaption class="graph-tools">
+      <button data-zoom-in>+</button><button data-zoom-out>-</button><button data-zoom-reset>reset</button>
+      <span class="graph-hint">scroll or pinch to zoom · drag to move · click a node to open</span>
+    </figcaption>
+  </figure>
+  {% include "_graph_legend.html" %}
+</section>
 {% elif mod.module_instances %}
 {% else %}
 <section class="card card-flat">

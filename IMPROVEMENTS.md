@@ -177,10 +177,35 @@ workflows of this repository use the same command as a user does.
 - The overview shows each top (at most four) with the same block diagram as its
   module page, thus the first page and the page of a module read the same way.
   One legend template serves both pages.
-- The direction of a logic port comes from the declaration. An interface port has
-  no direction in the language: the name gives it (`_i`, `_in`, `_o`, `_out`),
-  then the modport. A port that gives neither is a hexagon: the signals go in two
-  directions. The name comes before the modport, because a person reads the name.
+- A control or status net that touches one instance only keeps its single end:
+  its other side is the logic of the module itself, drawn as one dashed node.
+  On the datamover, the FSM of `datamover_top` drives `streamer_ctrl` and reads
+  `streamer_flags`; without that node, the whole control plane of the module was
+  invisible, because a net with one instance is not a connection between two
+  instances. A control or status port that only an `assign` drives (`evt_o`)
+  gets its pin the same way. Data nets keep the two-ends rule, because a
+  dangling data net is noise.
+- A module with no child instance gets the symbol view: one block with its pins
+  around it, with the same colours and the modport on each interface edge. Thus
+  each page of the site has a drawing, and a leaf like `hci_core_assign` shows
+  `target → module → initiator` at a glance.
+- A named generate block is a dashed cluster inside the module, thus
+  `use_fifo_gen` in the datamover streamer reads as one optional group. A plain
+  instance array stays one node with `xN`.
+- The branch of an `if`-generate that the parameters did not take is dropped:
+  slang keeps its symbols, but `isUninstantiated` marks them. Before this rule,
+  the streamer showed the FIFO path and the no-FIFO path at the same time, as if
+  both existed.
+- An instance of a module that no source declares (an `UninstantiatedDefSymbol`)
+  is in the model as a black box, with its port names and its nets. Before, it
+  was a hole: `demo_missing_cell` was not even a node.
+- The direction of a logic port comes from the declaration. An interface port
+  has no direction in the language: the modport gives it first, because the
+  compiler checked the modport, and the name (`_i`, `_in`, `_o`, `_out`) decides
+  only when there is no modport. On the HWPE streamer,
+  `hwpe_stream_intf_stream.source data_in` is an output; the name says the
+  other way, thus a name-first rule drew the stream on the wrong side. A port
+  that gives neither is a hexagon: the signals go in two directions.
 - `cds` draws about two thirds of the height of its node and `hexagon` draws the
   full height. Each pin gets the height that makes the two the same.
 - A node opens what it shows: an instance opens the module, an interface port and
@@ -211,7 +236,7 @@ workflows of this repository use the same command as a user does.
 
 ### The package layout
 
-- 17 modules, each with one subject, and no module above 370 lines. The layers
+- 18 modules, each with one subject, and no module above 400 lines. The layers
   are in the docstring of `rtldoc/__init__.py`, from `naming` and `model` at
   the bottom to `cli` at the top.
 - `tests/test_architecture.py` reads the imports of each module and stops a
@@ -223,7 +248,9 @@ workflows of this repository use the same command as a user does.
 - The splits: `naming` (the rules that read a name) out of `model`; `comments`
   (the comment above a unit) out of `extract`; `markup` (Markdown,
   reStructuredText and Doxygen) out of `docs`; `dot` (the colours, the DOT syntax
-  and the Graphviz process) out of `graphs`; `api` (the two steps) out of `cli`.
+  and the Graphviz process) out of `graphs`; `schematic` (the inside of one
+  module: the netlist view and the symbol view) out of `graphs`; `api` (the two
+  steps) out of `cli`.
 
 ## Known limitations
 
@@ -240,33 +267,24 @@ workflows of this repository use the same command as a user does.
   elaborated; dependency modules that are never instantiated appear as black boxes.
 - Connection grouping uses the base signal name, so a bit-select and the full
   signal are treated as the same net.
+- The kind of a signal comes from its name, not from its use. A control net with
+  a name that says nothing (`q`, `word`) stays grey, and the internal-logic node
+  appears only for a control or status net. Tracing use needs the processes.
+- Each module elaborates as its own top with its default parameters, thus a
+  module page shows the generate branch that the defaults take, which can differ
+  from the branch a parent takes.
 
 ## Future ideas
 
-### Visualising generate blocks (evaluated)
+### Visualising generate blocks (done)
 
-Possible: yes. Sensible: yes, for designs that use generate heavily.
-
-slang exposes the generate structure in the elaborated AST as
-`GenerateBlockArraySymbol` (for `for`-generate) and `GenerateBlockSymbol` (for
-`if`/`case`-generate), each with a name and the resolved loop range or branch
-condition. The extractor currently descends into these blocks and flattens them:
-loop copies of an instance are collapsed into a single `name xN` entry, and a
-conditional generate is represented by whichever branch elaborated.
-
-To show them, each generate block becomes a Graphviz cluster inside the cluster of
-the module boundary, because a cluster can hold another cluster. The label gives the
-name of the block and its condition, for example `for genvar i in [0:N]` or
-`if (FEATURE_EN)`. Each instance of that block is then in its cluster. The graph
-needs no new mechanism, thus the cost is small. The work is in the model: it must
-keep the generate blocks, and not make one list of the instances. That needs a
-`GenerateBlock` node between `Module` and `Instance`.
-
-Trade-offs: deeper nesting makes the layout busier for designs with many small
-generate blocks, and a flat `xN` summary is often easier to read for a simple loop.
-Recommendation: add it as a grouping that is applied when a module has named
-generate blocks, and keep the `xN` collapse for plain instance arrays. Medium
-effort, good payoff for parameterised or conditionally-built modules.
+Implemented as evaluated: each instance carries the name of the generate block
+that holds it (`Instance.gen_block`), and the graph draws one dashed cluster per
+named block inside the module boundary. A flat `xN` collapse stays for the
+copies of a loop, thus a simple loop is still one node. The blocks of an
+`if`-generate that the parameters did not take are dropped
+(`isUninstantiated`). The resolved loop range and the branch condition are not
+yet in the label; slang has them, and the label has room.
 
 ### Git: the commit of a module, and the diff of an interface (evaluated)
 

@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from . import __version__, docs, graphs, markup, project, source
+from . import __version__, docs, graphs, markup, project, schematic, source
 from .dot import render_dot
 from .model import Design, Module
 from .naming import reset_polarity, signal_kind
@@ -273,7 +273,7 @@ class Renderer:
         # first page and the page of a module read the same way.
         top_views = []
         for name in d.tops[:4]:
-            dot = graphs.internal_dot(d, name) if name in d.modules else ""
+            dot = schematic.internal_dot(d, name) if name in d.modules else ""
             top_svg = _responsive(render_dot(dot)) if dot else None
             if top_svg:
                 top_views.append({"name": name, "svg": top_svg})
@@ -302,13 +302,18 @@ class Renderer:
         # The comment above the declaration is Markdown or reStructuredText.
         comment_html = markup.link_names(markup.render_comment(mod.doc_comment),
                                        self._xref_targets) if mod.doc_comment else ""
-        dot = graphs.internal_dot(self.design, name)
+        dot = schematic.internal_dot(self.design, name)
         svg = _responsive(render_dot(dot)) if dot else None
+        # A module with no child instance still has a boundary: the symbol
+        # shows its pins with the same colours as the internal view.
+        symbol = "" if dot else schematic.symbol_dot(self.design, name)
+        symbol_svg = _responsive(render_dot(symbol)) if symbol else None
         ports = {"in": [], "out": [], "inout": []}
         for p in mod.ports:
             ports.get(p.eff_dir, ports["inout"]).append(p)
         html = self.env.get_template("module.html").render(
             **self._ctx(mod=mod, ports=ports, internal_svg=svg,
+                        symbol_svg=symbol_svg,
                         comment_html=comment_html, active="module")
         )
         self._write(f"module-{name}.html", html)

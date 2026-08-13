@@ -16,11 +16,14 @@ documentation of the
 
 ## What you get
 
-- **A block diagram of each module**, with the child instances, the interfaces
-  and the signals between them. The colours separate the data path from the
-  control plane: a stream or a bus is a wide green line with the direction of
-  the data, a control signal is amber and dashed and shows which module controls
-  what, and a flag or status signal is violet. The overview shows each top with
+- **A block diagram of each module**, with the child instances, the generate
+  blocks, the interfaces and the signals between them. The colours separate the
+  data path from the control plane: a stream or a bus is a wide green line with
+  the direction of the data, a control signal is amber and dashed and shows
+  which module controls what, and a flag or status signal is violet. The FSM
+  and the assignments of the module appear as one `internal logic` node, thus a
+  control net that ends in an `always` block is visible. A module with no
+  submodule shows its boundary as a symbol. The overview shows each top with
   the same diagram.
 - **A page for each module**: the ports with the resolved type and width, the
   parameter values, the clocks, the resets and the parent modules.
@@ -133,8 +136,8 @@ uv run ruff check .
 ```
 
 Each module has one subject: `bender` reads the project, `extract` elaborates it,
-`comments` and `markup` read the text, `graphs` and `dot` draw, `render` writes
-the site. A module imports from a lower layer only;
+`comments` and `markup` read the text, `schematic`, `graphs` and `dot` draw,
+`render` writes the site. A module imports from a lower layer only;
 [`tests/test_architecture.py`](tests/test_architecture.py) holds that rule and
 the docstring of [`rtldoc/__init__.py`](rtldoc/__init__.py) gives the
 layers.

@@ -320,6 +320,13 @@ def test_generate_loops_collapse_into_one_instance(run_cli, project_dir, stub_be
     assert len(stages) == 1
     assert stages[0]["count"] == 4
     assert stages[0]["array"] is True
+    assert stages[0]["gen_block"] == "gen_stage", "the name of the loop travels"
+    opt = [i for i in model["modules"]["demo_gen"]["instances"]
+           if i["name"] == "i_missing"]
+    assert opt[0]["gen_block"] == "gen_opt", "an if-generate keeps its name"
+    assert opt[0]["unknown"] is True, "a black box is an instance too"
+    names = [i["name"] for i in model["modules"]["demo_gen"]["instances"]]
+    assert "i_dead" not in names, "the untaken generate branch does not exist"
 
 
 def test_init_keeps_an_existing_config(run_cli, project_dir, capsys):

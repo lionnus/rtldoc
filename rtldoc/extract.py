@@ -62,28 +62,31 @@ def _kind(sym) -> str:
 
 
 def _direct_instances(body) -> list:
-    """The child instances of a module, with the name of each one.
+    """The child instances of a module: (symbol, name, generate block).
 
     Includes the generate blocks and the arrays. An element of an array has no
-    name of its own, thus the array gives the name to each element.
+    name of its own, thus the array gives the name to each element. The name of
+    the generate block that holds an instance travels with it; a block inside a
+    block keeps the outermost name, because that is the name in the source.
     """
     found: list = []
 
-    def walk(scope, name=""):
+    def walk(scope, name="", gen=""):
         for m in scope:
             k = _kind(m)
-            if k == "InstanceSymbol":
-                found.append((m, name or m.name))
+            if k in ("InstanceSymbol", "UninstantiatedDefSymbol"):
+                found.append((m, name or m.name, gen))
             elif k == "InstanceArraySymbol":
                 # `hci_core_intf virt_tcdm [1:0] (...)` declares an array. Without
                 # this, an interface array and a module array are not in the model.
-                walk(m, name or getattr(m, "name", ""))
-            elif k in (
-                "GenerateBlockSymbol",
-                "GenerateBlockArraySymbol",
-                "StatementBlockSymbol",
-            ):
-                walk(m)
+                walk(m, name or getattr(m, "name", ""), gen)
+            elif k in ("GenerateBlockSymbol", "GenerateBlockArraySymbol"):
+                # The branch of an `if`-generate that the parameters did not
+                # take still has symbols. Its hardware does not exist.
+                if not getattr(m, "isUninstantiated", False):
+                    walk(m, name, gen or getattr(m, "name", ""))
+            elif k == "StatementBlockSymbol":
+                walk(m, name, gen)
 
     walk(body)
     return found
@@ -168,7 +171,7 @@ def _net_text(expr, sm) -> str:
     return ""
 
 
-def _instance_from_symbol(inst, sm, name: str = "") -> Instance:
+def _instance_from_symbol(inst, sm, name: str = "", gen: str = "") -> Instance:
     body = inst.body
     defn = getattr(body, "definition", None)
     module = defn.name if defn is not None else getattr(body, "name", "?")
@@ -185,16 +188,34 @@ def _instance_from_symbol(inst, sm, name: str = "") -> Instance:
         conns.append(PortConn(port=pname, net=net, is_interface=is_if, modport=modport))
     return Instance(
         name=name or inst.name, module=module, params=params, conns=conns,
-        is_interface=is_iface,
+        is_interface=is_iface, gen_block=gen,
+    )
+
+
+def _instance_from_uninstantiated(sym, sm, name: str = "", gen: str = "") -> Instance:
+    """An instance of a module that no source file declares: a black box.
+
+    slang cannot resolve its ports, but the port names and the connected
+    expressions are in the symbol. Thus the box and its nets are in the graph,
+    in place of a hole where the missing module is.
+    """
+    names = list(getattr(sym, "portNames", []) or [])
+    conns = []
+    for i, pc in enumerate(getattr(sym, "portConnections", []) or []):
+        net = _net_text(getattr(pc, "expr", None), sm)
+        conns.append(PortConn(port=names[i] if i < len(names) else "", net=net))
+    return Instance(
+        name=name or sym.name, module=getattr(sym, "definitionName", "") or "?",
+        conns=conns, unknown=True, gen_block=gen,
     )
 
 
 def _collapse_instances(raw: list[Instance]) -> list[Instance]:
     """Makes one instance from the copies that a generate loop or an array makes."""
-    out: dict[tuple[str, str], Instance] = {}
-    order: list[tuple[str, str]] = []
+    out: dict[tuple[str, str, str], Instance] = {}
+    order: list[tuple[str, str, str]] = []
     for inst in raw:
-        key = (inst.name, inst.module)
+        key = (inst.name, inst.module, inst.gen_block)
         if key in out:
             out[key].count += 1
             out[key].array = True
@@ -245,7 +266,12 @@ def _module_from_body(body, sm) -> Module:
             pname = getattr(pkg, "name", "") if pkg is not None else ""
             if pname and pname not in mod.imports:
                 mod.imports.append(pname)
-    raw = [_instance_from_symbol(i, sm, name) for i, name in _direct_instances(body)]
+    raw = [
+        _instance_from_uninstantiated(i, sm, name, gen)
+        if _kind(i) == "UninstantiatedDefSymbol"
+        else _instance_from_symbol(i, sm, name, gen)
+        for i, name, gen in _direct_instances(body)
+    ]
     mod.instances = _collapse_instances(raw)
     return mod
 

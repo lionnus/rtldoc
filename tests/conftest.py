@@ -108,3 +108,35 @@ def stub_bender_with_dependency(stub_bender, monkeypatch):
     """The same bender, but `demo_adder` belongs to a second package."""
     monkeypatch.setenv("RTLDOC_STUB_DEP_FILES", "demo_adder.sv")
     return stub_bender
+
+
+@pytest.fixture
+def design():
+    """A design with two levels. The net `mid` connects the two adders."""
+    from rtldoc.model import BenderPackage, Design, Instance, Module, Port, PortConn
+
+    d = Design(root_package="demo_ip", project_root="/demo", tops=["top"])
+    d.modules["adder"] = Module(
+        name="adder", package="demo_ip",
+        ports=[Port("clk_i", "in"), Port("rst_ni", "in"), Port("a_i", "in", width=8),
+               Port("sum_o", "out", width=8)],
+    )
+    d.modules["top"] = Module(
+        name="top", package="demo_ip",
+        ports=[Port("clk_i", "in"), Port("x_i", "in", width=8),
+               Port("y_o", "out", width=8)],
+        instances=[
+            Instance(name="i_a", module="adder", conns=[
+                PortConn("clk_i", "clk_i"), PortConn("a_i", "x_i"),
+                PortConn("sum_o", "mid"),
+            ]),
+            Instance(name="i_b", module="adder", conns=[
+                PortConn("clk_i", "clk_i"), PortConn("a_i", "mid"),
+                PortConn("sum_o", "y_o"),
+            ]),
+        ],
+    )
+    d.packages["demo_ip"] = BenderPackage(name="demo_ip", root=True,
+                                          deps=["common_cells"])
+    d.packages["common_cells"] = BenderPackage(name="common_cells", version="1.40.0")
+    return d

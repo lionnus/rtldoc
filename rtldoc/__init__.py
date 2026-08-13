@@ -14,13 +14,14 @@ is no cycle. `tests/test_architecture.py` holds the rule.
 3. `comments` reads the comment above a unit, `extract` elaborates with slang,
    `docs` reads the written pages, `source` makes the code pages, `dot` drives
    Graphviz.
-4. `graphs` makes each graph, `render` writes the site, `check` examines it.
+4. `graphs` makes the global graphs, `schematic` draws the inside of one
+   module, `render` writes the site, `check` examines it.
 5. `cli` gives the commands.
 """
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "Design",

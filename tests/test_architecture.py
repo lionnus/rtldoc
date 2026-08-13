@@ -21,7 +21,7 @@ LAYERS = [
     ["model"],
     ["bender", "deps", "project", "markup"],
     ["comments", "docs", "dot", "extract", "source"],
-    ["graphs", "render", "check"],
+    ["graphs", "schematic", "render", "check"],
     ["api"],
     ["cli"],
 ]
@@ -33,7 +33,9 @@ SAME_LAYER = {
     ("extract", "comments"),
     ("docs", "markup"),
     ("graphs", "dot"),
+    ("schematic", "dot"),
     ("render", "graphs"),
+    ("render", "schematic"),
     ("render", "docs"),
     ("render", "source"),
     ("render", "markup"),

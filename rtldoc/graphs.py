@@ -1,43 +1,27 @@
-"""Makes the graphs.
+"""Makes the global graphs.
 
-Each function gives Graphviz DOT for one view of the design. There are four
-views: the contents of one module, the design hierarchy, the source files and the
-Bender packages. A node contains a link, thus the reader can move through the
-design. `dot` holds the colours, the DOT syntax and the Graphviz process.
+Each function gives Graphviz DOT for one view of the whole design: the
+hierarchy, the Bender packages and the source files. A node contains a link,
+thus the reader can move through the design. `schematic` draws the inside of
+one module, and `dot` holds the colours, the DOT syntax and Graphviz.
 """
 
 from __future__ import annotations
 
 import html
 import os
-import re
 
 from .dot import (
-    C_CLUSTER,
     C_CLUSTER_LINE,
-    C_CTRL,
     C_DEP,
     C_DEP_TXT,
-    C_IFACE,
-    C_IN,
-    C_IO,
-    C_NET,
-    C_NET_TXT,
-    C_OUT,
     C_OWNED,
-    C_STATUS,
     C_TOP,
-    FONT,
     FONT_MONO,
-    IFACE_PENWIDTH,
-    NET_BOX,
-    PIN_CDS,
-    PIN_HEX,
     edge,
     header,
 )
 from .model import Design
-from .naming import is_clock, is_reset, signal_kind
 
 
 def _mod_node(design: Design, name: str, *, focus: bool = False) -> str:
@@ -45,12 +29,16 @@ def _mod_node(design: Design, name: str, *, focus: bool = False) -> str:
     owned = mod is not None and mod.package == design.root_package
     is_top = name in design.tops
     label = html.escape(name)
+    if mod is None:
+        # A black box has no page, thus its node carries no link.
+        return ("[" + ", ".join([
+            f'label="{label}"', f'tooltip="{label} (not extracted)"',
+            f'fillcolor="{C_DEP}"', f'fontcolor="{C_DEP_TXT}"',
+            'style="filled,dashed"', 'penwidth=1', f'color="{C_CLUSTER_LINE}"',
+        ]) + "]")
     a = [f'label="{label}"', f'href="module-{name}.html"', 'target="_top"',
          f'tooltip="{label}"']
-    if mod is None:
-        a += [f'fillcolor="{C_DEP}"', f'fontcolor="{C_DEP_TXT}"', 'style="filled,dashed"',
-              'penwidth=1', 'color="#cbd5e1"']
-    elif is_top or focus:
+    if is_top or focus:
         a += [f'fillcolor="{C_TOP if is_top else C_OWNED}"', 'fontcolor="white"']
     elif owned:
         a += [f'fillcolor="{C_OWNED}"', 'fontcolor="white"']
@@ -59,218 +47,6 @@ def _mod_node(design: Design, name: str, *, focus: bool = False) -> str:
     return "[" + ", ".join(a) + "]"
 
 
-def _link(design: Design, unit: str) -> str:
-    """The DOT attributes that make a node open the page of *unit*."""
-    if not unit or unit not in design.modules:
-        return ""
-    return f'href="module-{unit}.html", target="_top", tooltip="{html.escape(unit)}", '
-
-
-# --- internal netlist -------------------------------------------------------
-
-_IDENT = re.compile(r"[A-Za-z_]\w*")
-
-
-def _net_base(expr: str) -> str:
-    """The name of the net in a connection expression.
-
-    Gives `` for a constant, a concatenation or a literal, because those are not
-    a net that two instances share.
-    """
-    e = (expr or "").strip().lstrip("(").strip()
-    if not e or e[0] in "'\"{0123456789":   # constants / concats / literals
-        return ""
-    m = _IDENT.match(e)
-    return m.group(0) if m else ""
-
-
-_DRIVER_MODPORTS = {"source", "initiator", "master", "mst", "out", "producer", "manager"}
-_LOAD_MODPORTS = {"sink", "subordinate", "slave", "slv", "in", "consumer", "target"}
-
-
-def _role(child, port: str) -> str:
-    """driver / load / both for a child instance's port (by its declared dir)."""
-    if child is None:
-        return "both"
-    for p in child.ports:
-        if p.name == port:
-            return {"in": "load", "out": "driver"}.get(p.direction, "both")
-    return "both"
-
-
-def _iface_role(modport: str) -> str:
-    """driver / load / both for an interface connection (by its modport name)."""
-    m = (modport or "").lower()
-    if m in _DRIVER_MODPORTS:
-        return "driver"
-    if m in _LOAD_MODPORTS:
-        return "load"
-    return "both"
-
-
-def _conn_role(conn, child) -> str:
-    return _iface_role(conn.modport) if conn.is_interface else _role(child, conn.port)
-
-
-def _edge_style(kind: str) -> dict:
-    """How an edge of one signal kind is drawn.
-
-    An interface is the data path: wide and green, and the arrow gives the
-    direction of the data. Control and status make the control plane: dashed,
-    and the arrow shows which module controls what. A plain wire stays grey.
-    """
-    if kind == "iface":
-        return {"color": C_IFACE, "penwidth": IFACE_PENWIDTH}
-    if kind == "control":
-        return {"color": C_CTRL, "dashed": True}
-    if kind == "status":
-        return {"color": C_STATUS, "dashed": True}
-    return {}
-
-
-def internal_dot(design: Design, name: str, max_nodes: int = 240) -> str:
-    """Schematic of *name*: child instances + the signals wiring them together."""
-    mod = design.modules[name]
-    insts = mod.module_instances
-    if not insts:
-        return ""
-
-    # net -> list of (node_id, role, modport). The modport labels the edge of an
-    # interface, thus a stream shows its source and its sink by name.
-    nets: dict[str, list[tuple[str, str, str]]] = {}
-
-    def add(net: str, node: str, role: str, modport: str = "") -> None:
-        if is_clock(net) or is_reset(net):
-            return
-        nets.setdefault(net, []).append((node, role, modport))
-
-    inst_ids: dict[str, str] = {}
-    for inst in insts:
-        nid = f"i__{inst.name}"
-        inst_ids[inst.name] = nid
-        child = design.modules.get(inst.module)
-        for c in inst.conns:
-            base = _net_base(c.net)
-            if base:
-                add(base, nid, _conn_role(c, child),
-                    c.modport if c.is_interface else "")
-
-    # A boundary port joins the net that has its name. `Port.graph_dir` gives
-    # `in`, `out` or `` for a port with no direction.
-    boundary: dict[str, dict] = {}
-    for p in mod.ports:
-        if p.name in nets and not (is_clock(p.name) or is_reset(p.name)):
-            d = p.graph_dir
-            role = "driver" if d == "in" else ("load" if d == "out" else "both")
-            boundary[p.name] = {
-                "dir": d,
-                "iface": p.interface if p.is_interface else "",
-                "is_iface": p.is_interface,
-            }
-            nets[p.name].append((f"p__{p.name}", role, p.modport))
-
-    # A net with one end only is not a connection. It stays out of the graph.
-    nets = {n: eps for n, eps in nets.items() if len({e[0] for e in eps}) >= 2}
-
-    kept_nets = sorted(nets)[:max_nodes]
-
-    # The interfaces that the module declares. The signal that carries an
-    # interface links to the declaration of that interface.
-    iface_of = {i.name: i.module for i in mod.interface_instances}
-
-    # The kind of each net: the data path, the control plane, or a plain wire.
-    def net_kind(net: str) -> str:
-        if net in iface_of or boundary.get(net, {}).get("is_iface"):
-            return "iface"
-        return signal_kind(net, design.conventions)
-
-    kinds = {net: net_kind(net) for net in kept_nets}
-
-    lines = [header("LR")]
-    # Boundary ports sit outside the module block, like external pins. A boundary
-    # port doubles as the hub for its net, so no separate signal node is drawn.
-    for net in kept_nets:
-        if net in boundary:
-            info = boundary[net]
-            rank = "min" if info["dir"] == "in" else "max"
-            if info["dir"] == "in":
-                shape = f"{PIN_CDS}, "
-            elif info["dir"] == "out":
-                shape = f"{PIN_CDS}, orientation=180, "
-            else:
-                # A hexagon has a point at each end: the signals go both ways.
-                shape = f"{PIN_HEX}, "
-            # The colour of a pin gives the kind: an interface is green, a
-            # control signal amber, a flag violet, a data signal has the colour
-            # of its direction. The shape still gives the direction.
-            if info["is_iface"]:
-                fill = C_IFACE
-            elif kinds[net] == "control":
-                fill = C_CTRL
-            elif kinds[net] == "status":
-                fill = C_STATUS
-            else:
-                fill = {"in": C_IN, "out": C_OUT}.get(info["dir"], C_IO)
-            lines.append(
-                f'  {{ rank={rank}; "p__{net}" [{shape}{_link(design, info["iface"])}'
-                f'label="{html.escape(net)}", fillcolor="{fill}", fontcolor="white", '
-                "fontsize=10]; }"
-            )
-    # The module itself is the enclosing block; submodules and signals nest inside.
-    lines.append(f'  subgraph "cluster_{name}" {{')
-    lines.append(
-        f'    label="{html.escape(name)}"; labeljust=l; fontname="{FONT}"; '
-        f'fontsize=11; fontcolor="{C_NET_TXT}"; style=filled; '
-        f'fillcolor="{C_CLUSTER}"; color="{C_CLUSTER_LINE}"; margin=14;'
-    )
-    for inst in insts[:max_nodes]:
-        lbl = html.escape(inst.name)
-        sub = html.escape(inst.module) + (f" x{inst.count}" if inst.count > 1 else "")
-        href = "" if inst.unknown else f'href="module-{inst.module}.html", target="_top", '
-        owned = (m := design.modules.get(inst.module)) is not None and m.package == design.root_package
-        fill = C_OWNED if owned else C_DEP
-        txt = "white" if owned else C_DEP_TXT
-        lines.append(
-            f'    "{inst_ids[inst.name]}" [{href}'
-            f'label=<<b>{lbl}</b><br/><font point-size="8">{sub}</font>>, '
-            f'fillcolor="{fill}", fontcolor="{txt}"];'
-        )
-    for net in kept_nets:
-        if net not in boundary:
-            iface = iface_of.get(net, "")
-            fill = {"iface": C_IFACE, "control": C_CTRL,
-                    "status": C_STATUS}.get(kinds[net], C_NET)
-            txt = C_NET_TXT if fill == C_NET else "white"
-            lines.append(
-                f'    "n__{net}" [{NET_BOX}, {_link(design, iface)}'
-                f'label="{html.escape(net)}", fillcolor="{fill}", fontcolor="{txt}", '
-                f'fontname="{FONT_MONO}", fontsize=9];'
-            )
-    lines.append("  }")
-    # Wiring: drivers point into the signal (or boundary pin), signals point out
-    # to their loads. The kind of the net styles the edge, and the modport of an
-    # interface connection labels it, thus a stream shows its direction and its
-    # two sides by name.
-    for net in kept_nets:
-        hub = f"p__{net}" if net in boundary else f"n__{net}"
-        style = _edge_style(kinds[net])
-        ends: dict[tuple[str, str], str] = {}
-        for node, role, modport in nets[net]:
-            if not node.startswith("p__"):
-                ends.setdefault((node, role), modport)
-        for (node, role), modport in sorted(ends.items()):
-            label = modport if kinds[net] == "iface" else ""
-            if role == "driver":
-                lines.append(edge(node, hub, label=label, **style))
-            elif role == "load":
-                lines.append(edge(hub, node, label=label, **style))
-            else:
-                lines.append(edge(hub, node, label=label, directed=False, **style))
-    lines.append("}")
-    return "\n".join(lines)
-
-
-# --- global hierarchy & packages -------------------------------------------
 
 def hierarchy_dot(design: Design, max_nodes: int = 140) -> str:
     roots = design.tops or [

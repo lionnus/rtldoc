@@ -20,9 +20,12 @@ module demo_gen #(
   end
 
   // An if-generate holds an instance of a module that no source file declares.
+  // The instance of the branch that ENABLE does not take must stay out.
   if (ENABLE) begin : gen_opt
     demo_missing_cell i_missing (.clk_i, .d_i(chain[N]), .q_o(y_o));
   end else begin : gen_opt
-    assign y_o = chain[N];
+    demo_adder #(.W(8)) i_dead (
+      .clk_i, .rst_ni, .a_i(chain[N]), .b_i(x_i), .sum_o(y_o)
+    );
   end
 endmodule

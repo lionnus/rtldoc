@@ -39,6 +39,7 @@ PIN_HEX = 'shape=hexagon, height=0.25, margin="0.16,0.0"'
 NET_BOX = 'shape=box, height=0.25, margin="0.10,0.0"'
 C_CLUSTER = "#f1f5f9"   # Fill of the module boundary
 C_CLUSTER_LINE = "#cbd5e1"
+C_GEN = "#e8edf4"       # Fill of a generate block inside the module boundary
 EDGE = "#94a3b8"
 FONT = "IBM Plex Sans"
 FONT_MONO = "IBM Plex Mono"

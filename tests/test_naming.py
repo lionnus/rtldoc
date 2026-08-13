@@ -21,15 +21,19 @@ def test_the_declaration_gives_the_direction_of_a_logic_port():
     assert Port("bus_i", "inout").graph_dir == "in"
 
 
-def test_an_interface_port_takes_the_direction_from_the_name_first():
+def test_an_interface_port_takes_the_direction_from_the_modport_first():
+    """The compiler checked the modport; the name is a convention. On the HWPE
+    streamer, `hwpe_stream_intf_stream.source data_in` is an output."""
     port = Port("data_in", "interface", is_interface=True, modport="source")
-    assert interface_dir("source") == "out", "the modport says the other way"
-    assert port.graph_dir == "in"
+    assert interface_dir("source") == "out"
+    assert port.graph_dir == "out"
 
 
-def test_an_interface_port_with_no_name_ending_uses_the_modport():
-    port = Port("bus", "interface", is_interface=True, modport="slave")
-    assert port.graph_dir == "in"
+def test_an_interface_port_with_no_modport_uses_the_name():
+    port = Port("data_in", "interface", is_interface=True, modport="monitor")
+    assert port.graph_dir == "in", "`monitor` gives no direction, `_in` does"
+    assert Port("bus", "interface", is_interface=True,
+                modport="slave").graph_dir == "in"
 
 
 def test_an_interface_port_with_no_direction_at_all():
