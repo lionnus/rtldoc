@@ -319,28 +319,57 @@ def extract_design(
     comp = driver.createCompilation()
     sm = comp.sourceManager
 
-    # The walk goes down the instance tree of each top. Each definition gives
-    # one module.
+    # Every owned module is a top, thus every owned module elaborates - also
+    # alone, with its default parameters. The reader clicks from a parent into
+    # a child, thus the page of the child must show the child as the parent
+    # builds it: the parameters of the instantiation decide the widths and the
+    # generate branches. The first pass takes each module from the tree of a
+    # parent; only a module that no parent instantiates keeps its default
+    # elaboration, in the second pass. The trees of the true design tops come
+    # first, thus the context is the real hierarchy and not an artificial top.
+    root = comp.getRoot()
+    tops_insts = list(root.topInstances)
+
+    def def_name(inst) -> str:
+        defn = getattr(inst.body, "definition", None)
+        return defn.name if defn is not None else getattr(inst.body, "name", "")
+
+    child_defs: set[str] = set()
+    for top in tops_insts:
+        def scan(sym, top=top):
+            if _kind(sym) == "InstanceSymbol" and sym is not top:
+                child_defs.add(def_name(sym))
+        try:
+            top.visit(scan)
+        except Exception:
+            pass
+    ordered = ([t for t in tops_insts if def_name(t) not in child_defs]
+               + [t for t in tops_insts if def_name(t) in child_defs])
+
     seen: set[str] = set()
 
-    def visit(sym):
-        if _kind(sym) == "InstanceSymbol":
-            body = sym.body
-            defn = getattr(body, "definition", None)
-            dname = defn.name if defn is not None else getattr(body, "name", "")
-            if dname and dname not in seen:
-                seen.add(dname)
-                try:
-                    design.modules[dname] = _module_from_body(body, sm)
-                except Exception as exc:  # One bad module must not stop the run
-                    design.diagnostics.append(f"extract {dname}: {exc}")
+    def collect(sym, context: str = "") -> None:
+        dname = def_name(sym)
+        if not dname or dname in seen:
+            return
+        seen.add(dname)
+        try:
+            mod = _module_from_body(sym.body, sm)
+            mod.elab_context = context
+            design.modules[dname] = mod
+        except Exception as exc:  # One bad module must not stop the run
+            design.diagnostics.append(f"extract {dname}: {exc}")
 
-    root = comp.getRoot()
-    for top in root.topInstances:
+    for top in ordered:
+        def visit(sym, top=top):
+            if _kind(sym) == "InstanceSymbol" and sym is not top:
+                collect(sym, str(getattr(sym, "hierarchicalPath", "") or ""))
         try:
             top.visit(visit)
         except Exception as exc:
             design.diagnostics.append(f"visit {top.name}: {exc}")
+    for top in ordered:
+        collect(top)
 
     # A module of the root package that slang did not elaborate keeps a page.
     for name in owned_modules:

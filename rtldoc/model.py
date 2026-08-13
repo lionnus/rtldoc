@@ -11,7 +11,14 @@ import dataclasses
 from dataclasses import dataclass, field
 from typing import Any
 
-from .naming import interface_dir, is_clock, is_reset, name_direction
+from .naming import (
+    interface_dir,
+    is_clear,
+    is_clock,
+    is_reset,
+    is_test_mode,
+    name_direction,
+)
 
 
 @dataclass
@@ -106,6 +113,9 @@ class Module:
     desc: str = ""             # The first sentence of the comment
     doc_comment: str = ""      # The full comment above the declaration
     elaborated: bool = False   # True if slang resolved the ports and the types
+    #: The hierarchical path of the instantiation whose parameters this page
+    #: shows (`dm_top.i_streamer`). Empty for a top: it shows its defaults.
+    elab_context: str = ""
     # Filled after the extraction
     instantiated_by: list[str] = field(default_factory=list)
     doc_page: str = ""         # The written page that documents this module
@@ -125,6 +135,16 @@ class Module:
     @property
     def resets(self) -> list[Port]:
         return [p for p in self.ports if is_reset(p.name)]
+
+    @property
+    def clears(self) -> list[Port]:
+        """The synchronous clears. A clear acts as a reset."""
+        return [p for p in self.ports if is_clear(p.name)]
+
+    @property
+    def test_modes(self) -> list[Port]:
+        """The DFT signals: test mode, scan, bist."""
+        return [p for p in self.ports if is_test_mode(p.name)]
 
     @property
     def module_instances(self) -> list[Instance]:

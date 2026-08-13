@@ -329,6 +329,18 @@ def test_generate_loops_collapse_into_one_instance(run_cli, project_dir, stub_be
     assert "i_dead" not in names, "the untaken generate branch does not exist"
 
 
+def test_a_module_page_shows_the_instantiated_version(run_cli, project_dir, stub_bender):
+    """A parent instantiates demo_adder, thus the page of demo_adder shows the
+    parameters of that instantiation, and names it. A top shows its defaults."""
+    assert _gen(run_cli, project_dir) == 0
+    model = json.loads((project_dir / project.DEFAULT_OUTPUT / "model.json").read_text())
+    assert model["modules"]["demo_top"]["elab_context"] == "", "a top has no parent"
+    ctx = model["modules"]["demo_adder"]["elab_context"]
+    assert ctx and "." in ctx, "a child names the instantiation it comes from"
+    page = (project_dir / project.DEFAULT_OUTPUT / "module-demo_adder.html").read_text()
+    assert ctx in page, "the page tells the reader which instantiation it shows"
+
+
 def test_init_keeps_an_existing_config(run_cli, project_dir, capsys):
     (project_dir / "rtldoc.yml").write_text("name: Mine\n")
     assert run_cli("init", cwd=project_dir) == 0

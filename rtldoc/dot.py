@@ -63,11 +63,15 @@ def render_dot(dot: str) -> str | None:
     return svg[i:] if i >= 0 else svg
 
 
-def header(rankdir: str = "TB") -> str:
+def header(rankdir: str = "TB", newrank: bool = False) -> str:
+    # `newrank` ranks the whole graph in one pass, thus a rank constraint holds
+    # against the contents of a cluster. The schematic needs it for the pin
+    # columns; the flat graphs do not.
     return (
         "digraph G {\n"
         f"  rankdir={rankdir};\n"
-        '  bgcolor="transparent";\n'
+        + ("  newrank=true;\n" if newrank else "")
+        + '  bgcolor="transparent";\n'
         f'  graph [fontname="{FONT}"];\n'
         f'  node [shape=box, style=filled, penwidth=0, fontname="{FONT}", '
         'fontsize=11, margin="0.16,0.07"];\n'
@@ -79,10 +83,15 @@ def header(rankdir: str = "TB") -> str:
 
 def edge(a: str, b: str, label: str = "", directed: bool = True,
          color: str = "", penwidth: float | None = None,
-         dashed: bool = False) -> str:
+         dashed: bool = False, constraint: bool = True,
+         weight: int | None = None) -> str:
     extra = []
     if label:
         extra.append(f'label="{html.escape(label)}"')
+    if weight is not None:
+        # A heavy edge is drawn straighter. The wire of a pin gets weight,
+        # thus the pin stands at the height of its partner.
+        extra.append(f"weight={weight}")
     if not directed:
         extra.append("dir=none")
     if color:
@@ -91,6 +100,10 @@ def edge(a: str, b: str, label: str = "", directed: bool = True,
         extra.append(f"penwidth={penwidth}")
     if dashed:
         extra.append('style="dashed"')
+    if not constraint:
+        # The edge is drawn, but it does not rank its ends. A wire to a pin
+        # must not pull the pin out of its column.
+        extra.append("constraint=false")
     if extra:
         return f'  "{a}" -> "{b}" [{", ".join(extra)}];'
     return f'  "{a}" -> "{b}";'

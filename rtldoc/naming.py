@@ -22,9 +22,10 @@ IN_MODPORTS = {"sink", "subordinate", "slave", "slv", "in", "consumer", "target"
 DIR_SUFFIX = (("_in", "in"), ("_out", "out"), ("_i", "in"), ("_o", "out"))
 
 #: The name parts of a control signal: one module sets the behaviour of another.
+#: `clear` is not here: a clear acts as a reset, thus `is_clear` handles it.
 CTRL_TOKENS = {
     "ctrl", "cfg", "config", "cmd", "mode", "sel", "en", "enable",
-    "start", "stop", "clear", "flush", "trigger",
+    "start", "stop", "flush", "trigger",
 }
 
 #: The name parts of a flag or status signal: the answer that control receives.
@@ -44,6 +45,30 @@ def is_clock(name: str) -> bool:
 def is_reset(name: str) -> bool:
     n = name.lower()
     return "rst" in n or "reset" in n
+
+
+def is_clear(name: str) -> bool:
+    """A synchronous clear. It acts as a reset, thus it is drawn as one."""
+    tokens = set(_TOKEN_SPLIT.split(name.lower()))
+    return bool(tokens & {"clear", "clr"})
+
+
+def is_test_mode(name: str) -> bool:
+    """A DFT signal: test mode, scan, bist. It goes to each instance."""
+    n = name.lower()
+    if "test_mode" in n or "test_en" in n or "testmode" in n:
+        return True
+    tokens = set(_TOKEN_SPLIT.split(n))
+    return bool(tokens & {"scan", "dft", "bist"})
+
+
+def is_background(name: str) -> bool:
+    """A signal that touches each instance: clock, reset, clear or test mode.
+
+    Such a net hides the data flow, thus the graphs leave it out, and the page
+    of the module shows it as a chip instead.
+    """
+    return is_clock(name) or is_reset(name) or is_clear(name) or is_test_mode(name)
 
 
 def interface_dir(modport: str) -> str:
@@ -74,6 +99,8 @@ def signal_kind(name: str, conventions: dict | None = None) -> str:
     expression is ignored, thus a bad settings file cannot stop a build.
     """
     n = (name or "").lower()
+    if is_background(n):
+        return ""
     for kind in ("control", "status"):
         for pattern in (conventions or {}).get(kind, []):
             try:

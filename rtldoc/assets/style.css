@@ -130,6 +130,8 @@ a.stat:hover { background:var(--bg-3); text-decoration:none; }
 .pill-pkg { background:var(--accent-weak); color:var(--accent); }
 .pill-file { background:var(--bg-3); color:var(--muted); }
 .pill-ok { background:color-mix(in srgb,var(--teal) 16%,transparent); color:var(--teal); }
+/* The instantiation whose parameters the page shows */
+.pill-inst { background:var(--bg-3); color:var(--text-2); overflow-wrap:anywhere; }
 a.pill:hover { text-decoration:none; filter:brightness(.96); }
 .chiprow { display:flex; flex-wrap:wrap; gap:7px; }
 .chip { display:inline-flex; flex-direction:column; padding:7px 12px; background:var(--bg-3);

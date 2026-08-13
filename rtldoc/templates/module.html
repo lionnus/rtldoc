@@ -20,6 +20,7 @@
          title="Read the code">{{ mod.rel_file }}{% if mod.line %}:{{ mod.line }}{% endif %}</a>
       {% elif mod.rel_file %}<span class="pill pill-file mono">{{ mod.rel_file }}{% if mod.line %}:{{ mod.line }}{% endif %}</span>{% endif %}
       {% if mod.elaborated %}<span class="pill pill-ok" title="slang resolved the ports and the widths">elaborated</span>{% endif %}
+      {% if mod.elab_context %}<span class="pill pill-inst mono" title="The parameters, the port widths and the generate branches on this page are those of this instantiation. Another instantiation can differ.">as {{ mod.elab_context }}</span>{% endif %}
       {% if mod.doc_page %}<a class="pill pill-doc" href="{{ mod.doc_page }}.html">documentation</a>{% endif %}
     </div>
   </div>
@@ -70,7 +71,7 @@
 </section>
 {% endif %}
 
-{% if mod.clocks or mod.resets %}
+{% if mod.clocks or mod.resets or mod.clears or mod.test_modes %}
 <section class="card cols">
   {% if mod.clocks %}
   <div>
@@ -85,6 +86,22 @@
     <h2>Resets</h2>
     <div class="chiprow">
       {% for r in mod.resets %}<span class="chip chip-rst">{{ r.name }}<span class="chip-sub">{{ r.name|reset_polarity }}</span></span>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% if mod.clears %}
+  <div>
+    <h2>Clears</h2>
+    <div class="chiprow">
+      {% for c in mod.clears %}<span class="chip chip-rst">{{ c.name }}<span class="chip-sub">synchronous</span></span>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% if mod.test_modes %}
+  <div>
+    <h2>Test / DFT</h2>
+    <div class="chiprow">
+      {% for t in mod.test_modes %}<span class="chip chip-clk">{{ t.name }}</span>{% endfor %}
     </div>
   </div>
   {% endif %}

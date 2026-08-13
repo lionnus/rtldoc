@@ -199,6 +199,25 @@ workflows of this repository use the same command as a user does.
 - An instance of a module that no source declares (an `UninstantiatedDefSymbol`)
   is in the model as a black box, with its port names and its nets. Before, it
   was a hole: `demo_missing_cell` was not even a node.
+- The page of a module shows the module as its parent instantiates it, not as
+  its defaults build it. The parameters of the instantiation decide the widths
+  and the generate branches, thus the reader who clicks from a parent into a
+  child sees the same hardware on both pages. The pill `as top.i_streamer`
+  names the instantiation. A true top - a module that nothing instantiates -
+  shows its defaults, because it has no parent. The extraction runs in two
+  passes: the trees of the true tops first, each child from the tree of its
+  parent; then the leftover tops with their defaults.
+- The clock, the reset, the synchronous clear and the test-mode nets stay out
+  of the graph: each of them touches each instance, and hides the data flow.
+  The page shows them as chips - Clocks, Resets, Clears, Test / DFT - and the
+  port table still lists them.
+- The pins hug the module box in two columns: the inputs at the left edge, the
+  outputs and the two-way ports at the right edge. Graphviz gives this only
+  with three mechanisms at once: one `rank` group per side with an invisible
+  anchor, invisible wall edges that put every inner node between the anchors,
+  and `newrank=true` so the ranks hold against the cluster. A wire that runs
+  against the side of its pin keeps `constraint=false`, or the ranking becomes
+  infeasible and Graphviz places the pins anywhere.
 - The direction of a logic port comes from the declaration. An interface port
   has no direction in the language: the modport gives it first, because the
   compiler checked the modport, and the name (`_i`, `_in`, `_o`, `_out`) decides
@@ -270,9 +289,9 @@ workflows of this repository use the same command as a user does.
 - The kind of a signal comes from its name, not from its use. A control net with
   a name that says nothing (`q`, `word`) stays grey, and the internal-logic node
   appears only for a control or status net. Tracing use needs the processes.
-- Each module elaborates as its own top with its default parameters, thus a
-  module page shows the generate branch that the defaults take, which can differ
-  from the branch a parent takes.
+- A module that is instantiated several times with different parameters has one
+  page: the first instantiation found, from the tree of a true top. The pill
+  names it, thus the reader knows which configuration they see.
 
 ## Future ideas
 

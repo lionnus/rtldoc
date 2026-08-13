@@ -80,6 +80,16 @@ def test_the_port_table_marks_a_control_port(tmp_path, monkeypatch):
     assert "kind-control" in page and ">ctrl</span>" in page
 
 
+def test_the_page_names_the_instantiation_it_shows(tmp_path, monkeypatch):
+    monkeypatch.setattr(render, "render_dot", lambda dot: None)
+    design = _design()
+    design.modules["leaf"].elab_context = "top.i_a"
+    r = render.Renderer(design, str(tmp_path))
+    r._render_module("leaf")
+    page = (tmp_path / "module-leaf.html").read_text()
+    assert "as top.i_a" in page
+
+
 def test_the_port_table_marks_with_the_rules_of_the_project(tmp_path, monkeypatch):
     monkeypatch.setattr(render, "render_dot", lambda dot: None)
     design = _design()

@@ -23,6 +23,18 @@ def test_internal_graph_omits_clocks_and_resets(design):
     assert "rst_ni" not in dot
 
 
+def test_internal_graph_omits_clear_and_test_mode(design):
+    """A clear and a test-mode net touch each instance, as a reset does."""
+    top = design.modules["top"]
+    top.ports += [Port("clear_i", "in"), Port("test_mode_i", "in")]
+    for inst in top.instances:
+        inst.conns += [PortConn("clear_i", "clear_i"),
+                       PortConn("test_mode_i", "test_mode_i")]
+    dot = schematic.internal_dot(design, "top")
+    assert "clear_i" not in dot
+    assert "test_mode_i" not in dot
+
+
 def test_internal_graph_is_empty_for_a_leaf_module(design):
     assert schematic.internal_dot(design, "adder") == ""
 
@@ -122,13 +134,27 @@ def test_the_modport_of_an_interface_port_gives_the_direction(with_interface):
     """`data_in` has the `sink` modport: the data comes in. When the modport
     and the name disagree, the modport wins, because the compiler checked it."""
     dot = schematic.internal_dot(with_interface, "top")
-    assert "rank=min; \"p__data_in\" [shape=cds, " in dot
-    assert "orientation=180" not in dot.split('"p__data_in"')[0].split("rank=min")[-1]
+    min_block = dot.split("rank=min;")[1].split("}")[0]
+    assert '"p__data_in" [shape=cds, ' in min_block, "an input pin, at the left"
+    assert "orientation" not in dot.split('"p__data_in" [')[1].split("]")[0]
 
 
 def test_the_modport_gives_the_direction_when_the_name_does_not(with_interface):
     dot = schematic.internal_dot(with_interface, "top")
-    assert 'rank=max; "p__bus" [shape=cds, height=0.37, margin="0.16,0.0", orientation=180' in dot
+    max_block = dot.split("rank=max;")[1].split("}")[0]
+    assert '"p__bus" [shape=cds' in max_block, "an output pin, at the right"
+    assert "orientation=180" in dot.split('"p__bus" [')[1].split("]")[0]
+
+
+def test_the_pins_of_one_side_share_one_column(with_interface):
+    """One rank group per side: the pins hug the module box in two columns,
+    instead of floating free in the canvas."""
+    dot = schematic.internal_dot(with_interface, "top")
+    assert dot.count("rank=min;") == 1
+    assert dot.count("rank=max;") == 1
+    assert "newrank=true" in dot, "the rank must hold against the cluster"
+    assert '"a__in"' in dot and '"a__out"' in dot, "each column has its anchor"
+    assert '-> "a__out" [style=invis' in dot, "the wall keeps the box inside"
 
 
 def test_each_interface_port_keeps_the_colour_of_an_interface(with_interface):
